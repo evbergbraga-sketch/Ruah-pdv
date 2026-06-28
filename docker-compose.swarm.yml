@@ -1,0 +1,89 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: pdv
+      POSTGRES_USER: pdv
+      POSTGRES_PASSWORD: RuahPdv2025
+    volumes:
+      - pdv_db:/var/lib/postgresql/data
+    networks:
+      - pdv_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pdv -d pdv"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+
+  backend:
+    image: ghcr.io/evbergbraga-sketch/ruah-pdv-backend:latest
+    environment:
+      NODE_ENV: production
+      PORT: "8010"
+      DATABASE_URL: postgresql://pdv:RuahPdv2025@postgres:5432/pdv
+      SUPABASE_URL: https://rbplrznmzrrhnyljztcr.supabase.co
+      SUPABASE_SERVICE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJicGxyem5tenJyaG55bGp6dGNyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjYwNDYxNywiZXhwIjoyMDk4MTgwNjE3fQ.VVY9zzpstvDAwQZn9__BHmefUlKjspwUQ2rnzWo5cV0
+      CORS_ORIGINS: https://ruahpdv.ruahsystems.com.br
+      FOCUS_NFE_AMBIENTE: homologacao
+    networks:
+      - pdv_net
+      - Berg
+    depends_on:
+      - postgres
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.pdv-api.rule=Host(`ruahpdv.ruahsystems.com.br`) && (PathPrefix(`/api`) || PathPrefix(`/health`))"
+        - "traefik.http.routers.pdv-api.entrypoints=websecure"
+        - "traefik.http.routers.pdv-api.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.pdv-api.priority=10"
+        - "traefik.http.services.pdv-api.loadbalancer.server.port=8010"
+        - "traefik.docker.network=Berg"
+
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 3010"
+    volumes:
+      - /root/Ruah-pdv/frontend:/app
+    environment:
+      VITE_API_URL: https://ruahpdv.ruahsystems.com.br
+    networks:
+      - Berg
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.pdv-front.rule=Host(`ruahpdv.ruahsystems.com.br`)"
+        - "traefik.http.routers.pdv-front.entrypoints=websecure"
+        - "traefik.http.routers.pdv-front.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.pdv-front.priority=1"
+        - "traefik.http.services.pdv-front.loadbalancer.server.port=3010"
+        - "traefik.docker.network=Berg"
+
+networks:
+  pdv_net:
+    driver: overlay
+    attachable: true
+  Berg:
+    external: true
+
+volumes:
+  pdv_db:
+    name: pdv_db
