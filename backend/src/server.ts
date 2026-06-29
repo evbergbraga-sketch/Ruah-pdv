@@ -8,7 +8,7 @@ import { pdvRoutes } from './modules/pdv/routes.js'
 import { caixaRoutes } from './modules/caixa/routes.js'
 import { fiscalRoutes } from './modules/fiscal/routes.js'
 
-const isDev = process.env.NODE_ENV !== 'production'
+const isDev = false
 const PORT = Number(process.env.PORT ?? 8010)
 
 const app = Fastify({
