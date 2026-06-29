@@ -1,4 +1,5 @@
-const BASE = import.meta.env.VITE_API_URL ?? 'https://ruah-pdv-production.up.railway.app'
+const BASE = (typeof import.meta !== 'undefined' && (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL) 
+  ?? 'https://ruahpdv.ruahsystems.com.br'
 
 async function req<T>(path: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -6,45 +7,59 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
     ...opts,
   })
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }))
-    throw new Error((err as { error: string }).error ?? 'Erro desconhecido')
+    const err = await res.json().catch(() => ({ error: res.statusText })) as { error: string }
+    throw new Error(err.error ?? 'Erro desconhecido')
   }
-  return res.json()
+  return res.json() as Promise<T>
+}
+
+export interface ProdutosResponse { produtos: Produto[] }
+export interface VendaResponse { venda: { id: string; numero: number; total: number } }
+export interface CaixaStatusResponse { caixa: CaixaInfo | null; aberto: boolean }
+
+export interface Produto {
+  id: string; nome: string; ean?: string; codigo?: string
+  preco_venda: number; preco_custo: number; unidade: string
+  estoque: number; categoria?: string; ncm: string; ativo: boolean
+}
+
+export interface CaixaInfo {
+  id: string; valor_abertura: number; aberto_em: string; operador: string
 }
 
 export const api = {
   pdv: {
     buscarProdutos: (q?: string, ean?: string) =>
-      req(`/api/pdv/produtos?${new URLSearchParams({ ...(q ? { q } : {}), ...(ean ? { ean } : {}) })}`),
+      req<ProdutosResponse>(`/api/pdv/produtos?${new URLSearchParams({ ...(q ? { q } : {}), ...(ean ? { ean } : {}) })}`),
     criarVenda: (body: unknown) =>
-      req('/api/pdv/venda', { method: 'POST', body: JSON.stringify(body) }),
+      req<VendaResponse>('/api/pdv/venda', { method: 'POST', body: JSON.stringify(body) }),
     buscarVenda: (id: string) =>
-      req(`/api/pdv/venda/${id}`),
+      req<{ venda: unknown }>(`/api/pdv/venda/${id}`),
   },
   estoque: {
     listar: (q?: string) =>
-      req(`/api/estoque/produtos${q ? `?q=${q}` : ''}`),
+      req<ProdutosResponse>(`/api/estoque/produtos${q ? `?q=${q}` : ''}`),
     criarProduto: (body: unknown) =>
-      req('/api/estoque/produtos', { method: 'POST', body: JSON.stringify(body) }),
+      req<{ produto: Produto }>('/api/estoque/produtos', { method: 'POST', body: JSON.stringify(body) }),
     entrada: (id: string, quantidade: number, motivo?: string) =>
-      req(`/api/estoque/produtos/${id}/entrada`, { method: 'POST', body: JSON.stringify({ quantidade, motivo }) }),
+      req<{ ok: boolean }>(`/api/estoque/produtos/${id}/entrada`, { method: 'POST', body: JSON.stringify({ quantidade, motivo }) }),
   },
   caixa: {
-    status: () => req('/api/caixa/status'),
+    status: () => req<CaixaStatusResponse>('/api/caixa/status'),
     abrir: (valor_abertura: number) =>
-      req('/api/caixa/abrir', { method: 'POST', body: JSON.stringify({ valor_abertura }) }),
+      req<{ caixa: CaixaInfo }>('/api/caixa/abrir', { method: 'POST', body: JSON.stringify({ valor_abertura }) }),
     fechar: (id: string, valor_fechamento: number, obs?: string) =>
-      req(`/api/caixa/${id}/fechar`, { method: 'POST', body: JSON.stringify({ valor_fechamento, observacoes: obs }) }),
+      req<{ caixa: CaixaInfo }>(`/api/caixa/${id}/fechar`, { method: 'POST', body: JSON.stringify({ valor_fechamento, observacoes: obs }) }),
     sangria: (id: string, valor: number, desc?: string) =>
-      req(`/api/caixa/${id}/sangria`, { method: 'POST', body: JSON.stringify({ valor, descricao: desc }) }),
+      req<{ movimento: unknown }>(`/api/caixa/${id}/sangria`, { method: 'POST', body: JSON.stringify({ valor, descricao: desc }) }),
     suprimento: (id: string, valor: number, desc?: string) =>
-      req(`/api/caixa/${id}/suprimento`, { method: 'POST', body: JSON.stringify({ valor, descricao: desc }) }),
-    movimentos: (id: string) => req(`/api/caixa/${id}/movimentos`),
+      req<{ movimento: unknown }>(`/api/caixa/${id}/suprimento`, { method: 'POST', body: JSON.stringify({ valor, descricao: desc }) }),
+    movimentos: (id: string) => req<{ movimentos: unknown[] }>(`/api/caixa/${id}/movimentos`),
   },
   fiscal: {
     emitirNFCe: (venda_id: string) =>
-      req(`/api/fiscal/nfce/${venda_id}`, { method: 'POST' }),
+      req<{ nota: unknown; focus_ref: string }>(`/api/fiscal/nfce/${venda_id}`, { method: 'POST' }),
     statusNFCe: (ref: string) =>
-      req(`/api/fiscal/nfce/${ref}/status`),
+      req<unknown>(`/api/fiscal/nfce/${ref}/status`),
   },
 }

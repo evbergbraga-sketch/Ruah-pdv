@@ -38,8 +38,9 @@ export function PDVPage() {
 
   const finalizar = useMutation({
     mutationFn: (body: unknown) => api.pdv.criarVenda(body),
-    onSuccess: (res: { venda: { numero: number; total: number } }) => {
-      setSucesso({ numero: res.venda.numero, total: res.venda.total, troco: Math.max(0, parseFloat(recebido || '0') - res.venda.total) })
+    onSuccess: (res: unknown) => {
+      const r = res as { venda: { numero: number; total: number } }
+      setSucesso({ numero: r.venda.numero, total: r.venda.total, troco: Math.max(0, parseFloat(recebido || '0') - r.venda.total) })
       setPagando(false)
     },
     onError: (e: Error) => toast.error(e.message),
