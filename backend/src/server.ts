@@ -7,6 +7,7 @@ import { db } from './db/client.js'
 import { pdvRoutes } from './modules/pdv/routes.js'
 import { caixaRoutes } from './modules/caixa/routes.js'
 import { fiscalRoutes } from './modules/fiscal/routes.js'
+import { estoqueRoutes } from './modules/estoque/routes.js'
 
 const isDev = false
 const PORT = Number(process.env.PORT ?? 8010)
@@ -36,9 +37,10 @@ app.get('/health', async (_, reply) => {
   }
 })
 
-await app.register(pdvRoutes,    { prefix: '/api/pdv' })
-await app.register(caixaRoutes,  { prefix: '/api/caixa' })
-await app.register(fiscalRoutes, { prefix: '/api/fiscal' })
+await app.register(pdvRoutes,     { prefix: '/api/pdv' })
+await app.register(caixaRoutes,   { prefix: '/api/caixa' })
+await app.register(fiscalRoutes,  { prefix: '/api/fiscal' })
+await app.register(estoqueRoutes, { prefix: '/api/estoque' })
 
 try {
   await app.listen({ port: PORT, host: '0.0.0.0' })
