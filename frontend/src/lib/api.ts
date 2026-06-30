@@ -45,6 +45,8 @@ export const api = {
       req<{ ok: boolean }>(`/api/estoque/produtos/${id}`, { method: 'DELETE' }),
     entrada: (id: string, quantidade: number, motivo?: string) =>
       req<{ ok: boolean }>(`/api/estoque/produtos/${id}/entrada`, { method: 'POST', body: JSON.stringify({ quantidade, motivo }) }),
+    saida: (id: string, quantidade: number, motivo?: string) =>
+      req<{ ok: boolean }>(`/api/estoque/produtos/${id}/saida`, { method: 'POST', body: JSON.stringify({ quantidade, motivo }) }),
   },
   caixa: {
     status: () => req<CaixaStatusResponse>('/api/caixa/status'),

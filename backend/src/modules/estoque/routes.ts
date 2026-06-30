@@ -152,4 +152,32 @@ export async function estoqueRoutes(app: FastifyInstance) {
 
     return reply.send({ ok: true })
   })
+
+  // Saída manual (perda, quebra, ajuste negativo)
+  app.post('/produtos/:id/saida', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const { quantidade, motivo } = req.body as { quantidade: number; motivo?: string }
+
+    if (!quantidade || quantidade <= 0) {
+      return reply.status(400).send({ error: 'Quantidade inválida' })
+    }
+
+    await withTenant(req.user.tenantId, async (tx) => {
+      const [atual] = await tx`SELECT quantidade FROM estoque WHERE produto_id = ${id}`
+      const qtdAntes = atual?.quantidade ?? 0
+
+      if (qtdAntes < quantidade) {
+        throw new Error(`Estoque insuficiente: disponível ${qtdAntes}, solicitado ${quantidade}`)
+      }
+
+      await tx`UPDATE estoque SET quantidade = quantidade - ${quantidade}, updated_at = NOW() WHERE produto_id = ${id}`
+
+      await tx`
+        INSERT INTO estoque_movimentos(tenant_id, produto_id, tipo, quantidade, qtd_antes, motivo, user_id)
+        VALUES(${req.user.tenantId}, ${id}, 'saida', ${-quantidade}, ${qtdAntes}, ${motivo ?? 'Saída manual'}, ${req.user.id})
+      `
+    })
+
+    return reply.send({ ok: true })
+  })
 }

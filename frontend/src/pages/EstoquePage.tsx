@@ -15,6 +15,11 @@ export function EstoquePage() {
   const [editando, setEditando] = useState<Produto | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [estoqueInicial, setEstoqueInicial] = useState('0')
+  const [ajustando, setAjustando] = useState<Produto | null>(null)
+  const [tipoAjuste, setTipoAjuste] = useState<'entrada' | 'saida'>('entrada')
+  const [qtdAjuste, setQtdAjuste] = useState('')
+  const [motivoAjuste, setMotivoAjuste] = useState('')
+  const [excluindo, setExcluindo] = useState<Produto | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['estoque-produtos', busca],
@@ -38,6 +43,27 @@ export function EstoquePage() {
       toast.success('Produto atualizado!')
       qc.invalidateQueries({ queryKey: ['estoque-produtos'] })
       fecharForm()
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  const ajustarEstoque = useMutation({
+    mutationFn: ({ id, tipo, qtd, motivo }: { id: string; tipo: 'entrada' | 'saida'; qtd: number; motivo?: string }) =>
+      tipo === 'entrada' ? api.estoque.entrada(id, qtd, motivo) : api.estoque.saida(id, qtd, motivo),
+    onSuccess: () => {
+      toast.success(tipoAjuste === 'entrada' ? 'Entrada registrada!' : 'Saída registrada!')
+      qc.invalidateQueries({ queryKey: ['estoque-produtos'] })
+      fecharAjuste()
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  const excluir = useMutation({
+    mutationFn: (id: string) => api.estoque.desativarProduto(id),
+    onSuccess: () => {
+      toast.success('Produto excluído!')
+      qc.invalidateQueries({ queryKey: ['estoque-produtos'] })
+      setExcluindo(null)
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -73,6 +99,26 @@ export function EstoquePage() {
     setEditando(null)
     setForm(EMPTY_FORM)
     setEstoqueInicial('0')
+  }
+
+  function abrirAjuste(p: Produto) {
+    setAjustando(p)
+    setTipoAjuste('entrada')
+    setQtdAjuste('')
+    setMotivoAjuste('')
+  }
+
+  function fecharAjuste() {
+    setAjustando(null)
+    setQtdAjuste('')
+    setMotivoAjuste('')
+  }
+
+  function confirmarAjuste() {
+    const qtd = parseInt(qtdAjuste)
+    if (!qtd || qtd <= 0) return toast.error('Quantidade inválida')
+    if (!ajustando) return
+    ajustarEstoque.mutate({ id: ajustando.id, tipo: tipoAjuste, qtd, motivo: motivoAjuste || undefined })
   }
 
   function salvar() {
@@ -210,12 +256,26 @@ export function EstoquePage() {
                     </span>
                   </td>
                   <td className="px-5 py-4">
-                    <button
-                      onClick={() => abrirEdicao(p)}
-                      className="text-xs text-txt3 hover:text-rose transition-colors font-medium"
-                    >
-                      Editar
-                    </button>
+                    <div className="flex items-center gap-3 justify-end">
+                      <button
+                        onClick={() => abrirAjuste(p)}
+                        className="text-xs text-txt3 hover:text-mint transition-colors font-medium"
+                      >
+                        Ajustar
+                      </button>
+                      <button
+                        onClick={() => abrirEdicao(p)}
+                        className="text-xs text-txt3 hover:text-rose transition-colors font-medium"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => setExcluindo(p)}
+                        className="text-xs text-txt3 hover:text-red transition-colors font-medium"
+                      >
+                        Excluir
+                      </button>
+                    </div>
                   </td>
                 </tr>
               )
@@ -305,9 +365,13 @@ export function EstoquePage() {
                     {editando ? 'Estoque Atual' : 'Estoque Inicial'}
                   </label>
                   {editando ? (
-                    <div className="w-full bg-bg4 border border-border rounded-lg px-3 py-2.5 text-sm text-txt3">
-                      {editando.estoque} un — <span className="text-rose">use "Entrada" para ajustar</span>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { fecharForm(); abrirAjuste(editando) }}
+                      className="w-full bg-bg4 border border-border rounded-lg px-3 py-2.5 text-sm text-txt3 text-left hover:border-mint transition-colors"
+                    >
+                      {editando.estoque} un — <span className="text-mint font-semibold">ajustar estoque →</span>
+                    </button>
                   ) : (
                     <input
                       type="number"
@@ -397,6 +461,102 @@ export function EstoquePage() {
                 className="flex-1 px-4 py-2.5 bg-rose text-white rounded-lg text-sm font-bold hover:bg-rose/90 disabled:opacity-50 transition-colors"
               >
                 {salvando ? 'Salvando...' : editando ? 'Salvar Alterações' : 'Cadastrar Produto'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de ajuste de estoque */}
+      {ajustando && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-bg2 border border-border rounded-2xl w-full max-w-sm p-6 space-y-5">
+            <div>
+              <h2 className="text-base font-bold">Ajustar Estoque</h2>
+              <p className="text-sm text-txt3 mt-1">{ajustando.nome} — atual: <span className="text-txt font-semibold">{ajustando.estoque} un</span></p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setTipoAjuste('entrada')}
+                className={`py-2.5 rounded-lg border text-sm font-semibold transition-all ${
+                  tipoAjuste === 'entrada' ? 'bg-green-dim border-green text-green' : 'bg-bg3 border-border text-txt2'
+                }`}
+              >
+                📥 Entrada
+              </button>
+              <button
+                onClick={() => setTipoAjuste('saida')}
+                className={`py-2.5 rounded-lg border text-sm font-semibold transition-all ${
+                  tipoAjuste === 'saida' ? 'bg-red/10 border-red text-red' : 'bg-bg3 border-border text-txt2'
+                }`}
+              >
+                📤 Saída
+              </button>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-txt3 uppercase tracking-wider block mb-1.5">Quantidade</label>
+              <input
+                autoFocus
+                type="number"
+                placeholder="0"
+                value={qtdAjuste}
+                onChange={e => setQtdAjuste(e.target.value)}
+                className="w-full bg-bg3 border border-border rounded-lg px-3 py-2.5 text-base text-txt outline-none focus:border-rose transition-colors"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-txt3 uppercase tracking-wider block mb-1.5">Motivo (opcional)</label>
+              <input
+                type="text"
+                placeholder={tipoAjuste === 'entrada' ? 'Ex: Compra de fornecedor' : 'Ex: Produto danificado'}
+                value={motivoAjuste}
+                onChange={e => setMotivoAjuste(e.target.value)}
+                className="w-full bg-bg3 border border-border rounded-lg px-3 py-2.5 text-sm text-txt outline-none focus:border-rose transition-colors placeholder:text-txt3"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={fecharAjuste} className="flex-1 py-2.5 border border-border rounded-lg text-sm font-semibold text-txt2 hover:text-txt transition-colors">
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarAjuste}
+                disabled={ajustarEstoque.isPending}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-bold text-white disabled:opacity-50 transition-colors ${
+                  tipoAjuste === 'entrada' ? 'bg-green hover:bg-green/90' : 'bg-red hover:bg-red/90'
+                }`}
+              >
+                {ajustarEstoque.isPending ? 'Salvando...' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmação de exclusão */}
+      {excluindo && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-bg2 border border-border rounded-2xl w-full max-w-sm p-6 space-y-5">
+            <div>
+              <h2 className="text-base font-bold text-red">Excluir Produto</h2>
+              <p className="text-sm text-txt2 mt-2">
+                Tem certeza que deseja excluir <span className="font-semibold text-txt">{excluindo.nome}</span>?
+              </p>
+              <p className="text-xs text-txt3 mt-1">O produto será desativado e não aparecerá mais no PDV ou Estoque.</p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setExcluindo(null)} className="flex-1 py-2.5 border border-border rounded-lg text-sm font-semibold text-txt2 hover:text-txt transition-colors">
+                Cancelar
+              </button>
+              <button
+                onClick={() => excluir.mutate(excluindo.id)}
+                disabled={excluir.isPending}
+                className="flex-1 py-2.5 bg-red text-white rounded-lg text-sm font-bold hover:bg-red/90 disabled:opacity-50 transition-colors"
+              >
+                {excluir.isPending ? 'Excluindo...' : 'Excluir'}
               </button>
             </div>
           </div>
