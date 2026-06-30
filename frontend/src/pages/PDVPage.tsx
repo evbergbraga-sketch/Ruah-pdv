@@ -30,6 +30,14 @@ export function PDVPage() {
 
   const { itens, total, subtotal, descontoVenda, addProduto, remover, setQtd, setDescVenda, limpar } = usePDV()
 
+  const { data: caixaData } = useQuery({
+    queryKey: ['caixa-status'],
+    queryFn: () => api.caixa.status(),
+    refetchInterval: 30_000,
+  })
+  const caixaAberto = caixaData?.aberto ?? false
+  const caixaId = caixaData?.caixa?.id
+
   const { data } = useQuery({
     queryKey: ['pdv-produtos', busca],
     queryFn: () => api.pdv.buscarProdutos(busca || undefined),
@@ -56,10 +64,12 @@ export function PDVPage() {
 
   function confirmarPagamento() {
     if (itens.length === 0) return
+    if (!caixaAberto || !caixaId) return toast.error('Abra o caixa antes de vender')
     const totalPago = parseFloat(recebido || String(total))
     if (totalPago < total - 0.01) return toast.error('Valor insuficiente')
 
     finalizar.mutate({
+      caixa_id: caixaId,
       itens: itens.map(i => ({
         produto_id: i.produto.id,
         quantidade: i.quantidade,
@@ -75,12 +85,12 @@ export function PDVPage() {
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if (e.key === 'F2') { e.preventDefault(); limpar(); buscaRef.current?.focus() }
-      if (e.key === 'F8') { e.preventDefault(); if (itens.length > 0) setPagando(true) }
+      if (e.key === 'F8') { e.preventDefault(); if (itens.length > 0 && caixaAberto) setPagando(true) }
       if (e.key === 'F3') { e.preventDefault(); setScanner(true) }
     }
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
-  }, [itens.length, limpar])
+  }, [itens.length, limpar, caixaAberto])
 
   const troco = Math.max(0, parseFloat(recebido || '0') - total)
 
@@ -193,10 +203,17 @@ export function PDVPage() {
           </div>
         )}
 
+        {/* Aviso de caixa fechado */}
+        {!caixaAberto && (
+          <div className="mx-4 mb-3 px-3 py-2.5 bg-gold/10 border border-gold/30 rounded-lg text-xs text-gold flex items-center gap-2">
+            ⚠️ Caixa fechado — <a href="/caixa" className="font-semibold underline">abra o caixa</a> para vender
+          </div>
+        )}
+
         {/* Botão pagar */}
         <button
           onClick={() => setPagando(true)}
-          disabled={itens.length === 0}
+          disabled={itens.length === 0 || !caixaAberto}
           className="mx-4 mb-4 py-3.5 bg-rose text-white font-bold text-sm rounded-xl hover:bg-rose/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
         >
           💳 Ir para Pagamento

@@ -4,7 +4,7 @@ import { withTenant } from '../../db/client.js'
 import { authenticate } from '../../middleware/auth.js'
 
 const criarVendaSchema = z.object({
-  caixa_id:      z.string().uuid().optional(),
+  caixa_id:      z.string().uuid({ message: 'Caixa precisa estar aberto para vender' }),
   cliente_id:    z.string().uuid().optional(),
   itens: z.array(z.object({
     produto_id:     z.string().uuid(),
@@ -93,41 +93,67 @@ export async function pdvRoutes(app: FastifyInstance) {
 
     const troco = Math.max(0, totalPago - total)
 
-    const venda = await withTenant(req.user.tenantId, async (tx) => {
-      const [{ numero }] = await tx`SELECT next_venda_number(${req.user.tenantId}) AS numero`
+    try {
+      const venda = await withTenant(req.user.tenantId, async (tx) => {
+        // Garante que o caixa existe, pertence ao tenant e está aberto —
+        // nunca confiar só na validação do frontend
+        const [caixa] = await tx`SELECT id, status FROM caixas WHERE id = ${caixa_id}`
+        if (!caixa) throw new Error('Caixa não encontrado')
+        if (caixa.status !== 'aberto') throw new Error('Caixa está fechado — abra o caixa antes de vender')
 
-      const [v] = await tx`
-        INSERT INTO vendas(tenant_id, caixa_id, cliente_id, user_id, numero,
-          status, subtotal, desconto_valor, total, troco, observacoes)
-        VALUES(${req.user.tenantId}, ${caixa_id ?? null}, ${cliente_id ?? null},
-          ${req.user.id}, ${numero}, 'finalizada',
-          ${subtotal}, ${desconto_valor}, ${total}, ${troco}, ${observacoes ?? null})
-        RETURNING *
-      `
+        const [{ numero }] = await tx`SELECT next_venda_number(${req.user.tenantId}) AS numero`
 
-      for (const item of itens) {
-        const [prod] = await tx`SELECT nome, ncm, cfop, cst FROM produtos WHERE id = ${item.produto_id}`
-        await tx`
-          INSERT INTO venda_itens(tenant_id, venda_id, produto_id, nome_produto,
-            quantidade, preco_unitario, desconto_valor, subtotal, ncm, cfop, cst)
-          VALUES(${req.user.tenantId}, ${v.id}, ${item.produto_id}, ${prod.nome},
-            ${item.quantidade}, ${item.preco_unitario}, ${item.desconto_valor},
-            ${item.preco_unitario * item.quantidade - item.desconto_valor},
-            ${prod.ncm}, ${prod.cfop}, ${prod.cst})
+        const [v] = await tx`
+          INSERT INTO vendas(tenant_id, caixa_id, cliente_id, user_id, numero,
+            status, subtotal, desconto_valor, total, troco, observacoes)
+          VALUES(${req.user.tenantId}, ${caixa_id}, ${cliente_id ?? null},
+            ${req.user.id}, ${numero}, 'finalizada',
+            ${subtotal}, ${desconto_valor}, ${total}, ${troco}, ${observacoes ?? null})
+          RETURNING *
         `
-      }
 
-      for (const p of pagamentos) {
-        await tx`
-          INSERT INTO pagamentos(tenant_id, venda_id, forma, valor, bandeira)
-          VALUES(${req.user.tenantId}, ${v.id}, ${p.forma}, ${p.valor}, ${p.bandeira ?? null})
-        `
-      }
+        for (const item of itens) {
+          const [prod] = await tx`SELECT nome, ncm, cfop, cst FROM produtos WHERE id = ${item.produto_id}`
+          await tx`
+            INSERT INTO venda_itens(tenant_id, venda_id, produto_id, nome_produto,
+              quantidade, preco_unitario, desconto_valor, subtotal, ncm, cfop, cst)
+            VALUES(${req.user.tenantId}, ${v.id}, ${item.produto_id}, ${prod.nome},
+              ${item.quantidade}, ${item.preco_unitario}, ${item.desconto_valor},
+              ${item.preco_unitario * item.quantidade - item.desconto_valor},
+              ${prod.ncm}, ${prod.cfop}, ${prod.cst})
+          `
 
-      return v
-    })
+          // Baixa de estoque explícita — não depender de trigger no banco,
+          // que já se mostrou frágil (perdido em recriações manuais do schema)
+          const [estoqueAtual] = await tx`SELECT quantidade FROM estoque WHERE produto_id = ${item.produto_id}`
+          const qtdAntes = estoqueAtual?.quantidade ?? 0
 
-    return reply.status(201).send({ venda })
+          await tx`
+            UPDATE estoque SET quantidade = quantidade - ${item.quantidade}, updated_at = NOW()
+            WHERE produto_id = ${item.produto_id}
+          `
+
+          await tx`
+            INSERT INTO estoque_movimentos(tenant_id, produto_id, tipo, quantidade, qtd_antes, venda_id, motivo)
+            VALUES(${req.user.tenantId}, ${item.produto_id}, 'venda', ${-item.quantidade}, ${qtdAntes}, ${v.id}, ${'Venda #' + numero})
+          `
+        }
+
+        for (const p of pagamentos) {
+          await tx`
+            INSERT INTO pagamentos(tenant_id, venda_id, forma, valor, bandeira)
+            VALUES(${req.user.tenantId}, ${v.id}, ${p.forma}, ${p.valor}, ${p.bandeira ?? null})
+          `
+        }
+
+        return v
+      })
+
+      return reply.status(201).send({ venda })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao processar venda'
+      return reply.status(400).send({ error: msg })
+    }
   })
 
   // Busca venda completa para impressão / reimpressão
