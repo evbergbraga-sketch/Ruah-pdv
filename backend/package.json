@@ -14,8 +14,10 @@
     "@fastify/rate-limit": "^9.1.0",
     "@fastify/sensible": "^5.5.0",
     "@supabase/supabase-js": "^2.110.0",
+    "@types/ws": "^8.18.1",
     "fastify": "^4.27.0",
     "postgres": "^3.4.4",
+    "ws": "^8.21.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
