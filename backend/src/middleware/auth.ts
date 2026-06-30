@@ -1,22 +1,12 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
-import { createClient } from '@supabase/supabase-js'
 import { db } from '../db/client.js'
+import { supabase } from '../lib/supabase.js'
 
 declare module 'fastify' {
   interface FastifyRequest {
     user: { id: string; tenantId: string; role: string; email: string }
   }
 }
-
-// Cliente Supabase configurado SEM Realtime — evita o crash de
-// WebSocket que ocorre no Node 20 (Realtime exige Node 22+)
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!,
-  {
-    auth: { persistSession: false, autoRefreshToken: false },
-  }
-)
 
 export async function authenticate(req: FastifyRequest, reply: FastifyReply) {
   const token = req.headers.authorization?.replace('Bearer ', '')

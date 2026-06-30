@@ -1,13 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { createClient } from '@supabase/supabase-js'
 import { db } from '../../db/client.js'
-
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!,
-  { auth: { persistSession: false, autoRefreshToken: false } }
-)
+import { supabase } from '../../lib/supabase.js'
 
 const loginSchema = z.object({
   email: z.string().email(),
