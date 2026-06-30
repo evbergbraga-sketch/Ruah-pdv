@@ -10,7 +10,7 @@ export async function caixaRoutes(app: FastifyInstance) {
   app.get('/status', async (req, reply) => {
     const [caixa] = await withTenant(req.user.tenantId, async (tx) => tx`
       SELECT c.*, u.nome AS operador
-      FROM caixas c JOIN users u ON u.id = c.user_abertura_id
+      FROM caixas c LEFT JOIN users u ON u.id = c.user_abertura_id
       WHERE c.status = 'aberto' ORDER BY c.aberto_em DESC LIMIT 1
     `)
     return reply.send({ caixa: caixa ?? null, aberto: !!caixa })
