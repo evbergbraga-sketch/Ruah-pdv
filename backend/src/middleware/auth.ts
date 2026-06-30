@@ -1,4 +1,6 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
+import { createClient } from '@supabase/supabase-js'
+import { db } from '../db/client.js'
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -6,13 +8,35 @@ declare module 'fastify' {
   }
 }
 
-// Auth temporário — JWT + Supabase será adicionado após o sistema estar rodando
-export async function authenticate(req: FastifyRequest, _reply: FastifyReply) {
-  // Tenant fixo para o primeiro estabelecimento
+// Cliente Supabase configurado SEM Realtime — evita o crash de
+// WebSocket que ocorre no Node 20 (Realtime exige Node 22+)
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_KEY!,
+  {
+    auth: { persistSession: false, autoRefreshToken: false },
+  }
+)
+
+export async function authenticate(req: FastifyRequest, reply: FastifyReply) {
+  const token = req.headers.authorization?.replace('Bearer ', '')
+  if (!token) return reply.status(401).send({ error: 'Token não fornecido' })
+
+  const { data, error } = await supabase.auth.getUser(token)
+  if (error || !data.user) return reply.status(401).send({ error: 'Token inválido ou expirado' })
+
+  const [user] = await db`
+    SELECT id, tenant_id, role, ativo FROM users
+    WHERE auth_id = ${data.user.id} LIMIT 1
+  `
+
+  if (!user) return reply.status(403).send({ error: 'Usuário não vinculado a nenhuma empresa' })
+  if (!user.ativo) return reply.status(403).send({ error: 'Usuário desativado' })
+
   req.user = {
-    id: '00000000-0000-0000-0000-000000000001',
-    tenantId: '00000000-0000-0000-0000-000000000001',
-    role: 'admin',
-    email: 'admin@bellamakeup.com.br',
+    id: user.id,
+    tenantId: user.tenant_id,
+    role: user.role,
+    email: data.user.email!,
   }
 }

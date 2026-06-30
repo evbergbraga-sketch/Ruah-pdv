@@ -8,6 +8,7 @@ import { pdvRoutes } from './modules/pdv/routes.js'
 import { caixaRoutes } from './modules/caixa/routes.js'
 import { fiscalRoutes } from './modules/fiscal/routes.js'
 import { estoqueRoutes } from './modules/estoque/routes.js'
+import { authRoutes } from './modules/auth/routes.js'
 
 const isDev = false
 const PORT = Number(process.env.PORT ?? 8010)
@@ -37,6 +38,10 @@ app.get('/health', async (_, reply) => {
   }
 })
 
+// Rotas públicas (sem autenticação)
+await app.register(authRoutes, { prefix: '/api/auth' })
+
+// Rotas protegidas (exigem token válido)
 await app.register(pdvRoutes,     { prefix: '/api/pdv' })
 await app.register(caixaRoutes,   { prefix: '/api/caixa' })
 await app.register(fiscalRoutes,  { prefix: '/api/fiscal' })

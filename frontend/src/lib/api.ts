@@ -1,13 +1,31 @@
 const BASE = (typeof import.meta !== 'undefined' && (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL)
   ?? 'https://ruahpdv.ruahsystems.com.br'
 
+function getToken(): string | null {
+  try {
+    const raw = localStorage.getItem('ruah-pdv-auth')
+    if (!raw) return null
+    return JSON.parse(raw).state?.token ?? null
+  } catch {
+    return null
+  }
+}
+
 async function req<T>(path: string, opts?: RequestInit): Promise<T> {
+  const token = getToken()
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     ...opts,
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText })) as { error: string }
+    if (res.status === 401) {
+      localStorage.removeItem('ruah-pdv-auth')
+      window.location.href = '/login'
+    }
     throw new Error(err.error ?? 'Erro desconhecido')
   }
   return res.json() as Promise<T>
@@ -24,8 +42,19 @@ export interface ProdutosResponse { produtos: Produto[] }
 export interface VendaResponse { venda: { id: string; numero: number; total: number } }
 export interface CaixaInfo { id: string; valor_abertura: number; aberto_em: string; operador: string }
 export interface CaixaStatusResponse { caixa: CaixaInfo | null; aberto: boolean }
+export interface LoginResponse {
+  token: string
+  user: { id: string; nome: string; email: string; role: string; empresa: string; tenantId: string }
+}
 
 export const api = {
+  auth: {
+    login: (email: string, senha: string) =>
+      req<LoginResponse>('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, senha }) }),
+    registro: (body: unknown) =>
+      req<{ empresa: string; usuario: string; mensagem: string }>('/api/auth/registro', { method: 'POST', body: JSON.stringify(body) }),
+    me: () => req<{ user: LoginResponse['user'] }>('/api/auth/me'),
+  },
   pdv: {
     buscarProdutos: (q?: string, ean?: string) =>
       req<ProdutosResponse>(`/api/pdv/produtos?${new URLSearchParams({ ...(q ? { q } : {}), ...(ean ? { ean } : {}) })}`),
