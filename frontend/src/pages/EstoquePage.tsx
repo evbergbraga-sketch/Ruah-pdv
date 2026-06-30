@@ -1,21 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { api } from '../lib/api'
-
-interface Produto {
-  id: string
-  nome: string
-  ean?: string
-  codigo?: string
-  preco_venda: number
-  preco_custo: number
-  unidade: string
-  estoque: number
-  categoria?: string
-  ncm: string
-  ativo: boolean
-}
+import { api, type Produto } from '../lib/api'
 
 const EMPTY_FORM = {
   nome: '', ean: '', codigo: '', preco_venda: '', preco_custo: '',
@@ -26,45 +12,91 @@ export function EstoquePage() {
   const qc = useQueryClient()
   const [busca, setBusca] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [editando, setEditando] = useState<Produto | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [estoqueInicial, setEstoqueInicial] = useState('0')
 
   const { data, isLoading } = useQuery({
-    queryKey: ['produtos', busca],
-    queryFn: () => api.pdv.buscarProdutos(busca || undefined),
+    queryKey: ['estoque-produtos', busca],
+    queryFn: () => api.estoque.listar(busca || undefined),
   })
 
   const criar = useMutation({
     mutationFn: (body: Record<string, unknown>) => api.estoque.criarProduto(body),
     onSuccess: () => {
       toast.success('Produto cadastrado!')
-      qc.invalidateQueries({ queryKey: ['produtos'] })
-      setShowForm(false)
-      setForm(EMPTY_FORM)
-      setEstoqueInicial('0')
+      qc.invalidateQueries({ queryKey: ['estoque-produtos'] })
+      fecharForm()
     },
     onError: (e: Error) => toast.error(e.message),
   })
 
-  const produtos: Produto[] = (data as { produtos: Produto[] })?.produtos ?? []
-  const filtrados = busca
-    ? produtos.filter(p =>
-        p.nome.toLowerCase().includes(busca.toLowerCase()) ||
-        (p.ean ?? '').includes(busca) ||
-        (p.codigo ?? '').includes(busca)
-      )
-    : produtos
+  const atualizar = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: Record<string, unknown> }) =>
+      api.estoque.atualizarProduto(id, body),
+    onSuccess: () => {
+      toast.success('Produto atualizado!')
+      qc.invalidateQueries({ queryKey: ['estoque-produtos'] })
+      fecharForm()
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  const produtos: Produto[] = data?.produtos ?? []
+
+  function abrirNovo() {
+    setEditando(null)
+    setForm(EMPTY_FORM)
+    setEstoqueInicial('0')
+    setShowForm(true)
+  }
+
+  function abrirEdicao(p: Produto) {
+    setEditando(p)
+    setForm({
+      nome: p.nome,
+      ean: p.ean ?? '',
+      codigo: p.codigo ?? '',
+      preco_venda: String(p.preco_venda),
+      preco_custo: String(p.preco_custo ?? 0),
+      unidade: p.unidade,
+      ncm: p.ncm,
+      cfop: p.cfop,
+      cst: p.cst,
+      estoque_minimo: String(p.estoque_minimo ?? 5),
+    })
+    setShowForm(true)
+  }
+
+  function fecharForm() {
+    setShowForm(false)
+    setEditando(null)
+    setForm(EMPTY_FORM)
+    setEstoqueInicial('0')
+  }
 
   function salvar() {
     if (!form.nome.trim()) return toast.error('Nome é obrigatório')
     if (!form.preco_venda) return toast.error('Preço de venda é obrigatório')
-    criar.mutate({
-      ...form,
+
+    const payload = {
+      nome: form.nome,
+      ean: form.ean || undefined,
+      codigo: form.codigo || undefined,
       preco_venda: parseFloat(form.preco_venda),
       preco_custo: parseFloat(form.preco_custo || '0'),
+      unidade: form.unidade,
+      ncm: form.ncm,
+      cfop: form.cfop,
+      cst: form.cst,
       estoque_minimo: parseInt(form.estoque_minimo),
-      estoque_inicial: parseInt(estoqueInicial),
-    })
+    }
+
+    if (editando) {
+      atualizar.mutate({ id: editando.id, body: payload })
+    } else {
+      criar.mutate({ ...payload, estoque_inicial: parseInt(estoqueInicial) })
+    }
   }
 
   const statusEstoque = (qtd: number) => {
@@ -72,6 +104,8 @@ export function EstoquePage() {
     if (qtd <= 5) return { label: 'Baixo', color: 'text-gold bg-gold/10 border-gold/20' }
     return { label: 'OK', color: 'text-green bg-green/10 border-green/20' }
   }
+
+  const salvando = criar.isPending || atualizar.isPending
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
@@ -82,7 +116,7 @@ export function EstoquePage() {
           <p className="text-sm text-txt3 mt-1">Catálogo e controle de produtos</p>
         </div>
         <button
-          onClick={() => setShowForm(true)}
+          onClick={abrirNovo}
           className="px-4 py-2 bg-rose text-white text-sm font-bold rounded-lg hover:bg-rose/90 transition-colors"
         >
           + Novo Produto
@@ -126,20 +160,20 @@ export function EstoquePage() {
           <tbody>
             {isLoading ? (
               <tr><td colSpan={7} className="px-5 py-12 text-center text-txt3 text-sm">Carregando...</td></tr>
-            ) : filtrados.length === 0 ? (
+            ) : produtos.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-5 py-12 text-center">
                   <div className="text-txt3 text-sm">
                     {busca ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado ainda'}
                   </div>
                   {!busca && (
-                    <button onClick={() => setShowForm(true)} className="mt-3 text-rose text-sm font-semibold hover:underline">
+                    <button onClick={abrirNovo} className="mt-3 text-rose text-sm font-semibold hover:underline">
                       Cadastrar primeiro produto →
                     </button>
                   )}
                 </td>
               </tr>
-            ) : filtrados.map(p => {
+            ) : produtos.map(p => {
               const st = statusEstoque(p.estoque ?? 0)
               return (
                 <tr key={p.id} className="border-b border-border hover:bg-bg3 transition-colors">
@@ -156,7 +190,7 @@ export function EstoquePage() {
                     R$ {Number(p.preco_venda).toFixed(2).replace('.', ',')}
                   </td>
                   <td className="px-5 py-4 text-txt3 text-sm">
-                    R$ {Number(p.preco_custo).toFixed(2).replace('.', ',')}
+                    R$ {Number(p.preco_custo ?? 0).toFixed(2).replace('.', ',')}
                   </td>
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-2">
@@ -176,7 +210,12 @@ export function EstoquePage() {
                     </span>
                   </td>
                   <td className="px-5 py-4">
-                    <button className="text-xs text-txt3 hover:text-rose transition-colors font-medium">Editar</button>
+                    <button
+                      onClick={() => abrirEdicao(p)}
+                      className="text-xs text-txt3 hover:text-rose transition-colors font-medium"
+                    >
+                      Editar
+                    </button>
                   </td>
                 </tr>
               )
@@ -185,17 +224,16 @@ export function EstoquePage() {
         </table>
       </div>
 
-      {/* Modal de cadastro */}
+      {/* Modal de cadastro/edição */}
       {showForm && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-bg2 border border-border rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-5 border-b border-border">
-              <h2 className="text-base font-bold">Novo Produto</h2>
-              <button onClick={() => setShowForm(false)} className="text-txt3 hover:text-txt text-xl leading-none">×</button>
+              <h2 className="text-base font-bold">{editando ? 'Editar Produto' : 'Novo Produto'}</h2>
+              <button onClick={fecharForm} className="text-txt3 hover:text-txt text-xl leading-none">×</button>
             </div>
 
             <div className="p-6 space-y-4">
-              {/* Nome */}
               <div>
                 <label className="text-xs font-semibold text-txt3 uppercase tracking-wider block mb-1.5">Nome *</label>
                 <input
@@ -207,7 +245,6 @@ export function EstoquePage() {
                 />
               </div>
 
-              {/* Códigos */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-txt3 uppercase tracking-wider block mb-1.5">EAN / Código de Barras</label>
@@ -231,7 +268,6 @@ export function EstoquePage() {
                 </div>
               </div>
 
-              {/* Preços */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-txt3 uppercase tracking-wider block mb-1.5">Preço de Venda *</label>
@@ -263,17 +299,24 @@ export function EstoquePage() {
                 </div>
               </div>
 
-              {/* Estoque e Unidade */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-txt3 uppercase tracking-wider block mb-1.5">Estoque Inicial</label>
-                  <input
-                    type="number"
-                    placeholder="0"
-                    value={estoqueInicial}
-                    onChange={e => setEstoqueInicial(e.target.value)}
-                    className="w-full bg-bg3 border border-border rounded-lg px-3 py-2.5 text-sm text-txt outline-none focus:border-rose transition-colors"
-                  />
+                  <label className="text-xs font-semibold text-txt3 uppercase tracking-wider block mb-1.5">
+                    {editando ? 'Estoque Atual' : 'Estoque Inicial'}
+                  </label>
+                  {editando ? (
+                    <div className="w-full bg-bg4 border border-border rounded-lg px-3 py-2.5 text-sm text-txt3">
+                      {editando.estoque} un — <span className="text-rose">use "Entrada" para ajustar</span>
+                    </div>
+                  ) : (
+                    <input
+                      type="number"
+                      placeholder="0"
+                      value={estoqueInicial}
+                      onChange={e => setEstoqueInicial(e.target.value)}
+                      className="w-full bg-bg3 border border-border rounded-lg px-3 py-2.5 text-sm text-txt outline-none focus:border-rose transition-colors"
+                    />
+                  )}
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-txt3 uppercase tracking-wider block mb-1.5">Estoque Mínimo</label>
@@ -297,7 +340,6 @@ export function EstoquePage() {
                 </div>
               </div>
 
-              {/* Fiscal */}
               <div className="border border-border/50 rounded-xl p-4 space-y-3">
                 <div className="text-xs font-semibold text-txt3 uppercase tracking-wider">Dados Fiscais (NFC-e)</div>
                 <div className="grid grid-cols-3 gap-3">
@@ -332,8 +374,7 @@ export function EstoquePage() {
                 <p className="text-xs text-txt3">NCM 33049900 = cosméticos (padrão para maquiagem)</p>
               </div>
 
-              {/* Margem */}
-              {form.preco_venda && form.preco_custo && (
+              {form.preco_venda && form.preco_custo && parseFloat(form.preco_venda) > 0 && (
                 <div className="bg-green-dim border border-green/20 rounded-lg px-4 py-3 text-sm">
                   <span className="text-txt2">Margem de lucro: </span>
                   <span className="font-bold text-green">
@@ -345,17 +386,17 @@ export function EstoquePage() {
 
             <div className="flex gap-3 px-6 py-4 border-t border-border">
               <button
-                onClick={() => setShowForm(false)}
+                onClick={fecharForm}
                 className="flex-1 px-4 py-2.5 border border-border rounded-lg text-sm font-semibold text-txt2 hover:text-txt hover:border-border/80 transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={salvar}
-                disabled={criar.isPending}
+                disabled={salvando}
                 className="flex-1 px-4 py-2.5 bg-rose text-white rounded-lg text-sm font-bold hover:bg-rose/90 disabled:opacity-50 transition-colors"
               >
-                {criar.isPending ? 'Salvando...' : 'Cadastrar Produto'}
+                {salvando ? 'Salvando...' : editando ? 'Salvar Alterações' : 'Cadastrar Produto'}
               </button>
             </div>
           </div>

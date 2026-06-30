@@ -1,4 +1,4 @@
-const BASE = (typeof import.meta !== 'undefined' && (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL) 
+const BASE = (typeof import.meta !== 'undefined' && (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL)
   ?? 'https://ruahpdv.ruahsystems.com.br'
 
 async function req<T>(path: string, opts?: RequestInit): Promise<T> {
@@ -13,19 +13,17 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
-export interface ProdutosResponse { produtos: Produto[] }
-export interface VendaResponse { venda: { id: string; numero: number; total: number } }
-export interface CaixaStatusResponse { caixa: CaixaInfo | null; aberto: boolean }
-
 export interface Produto {
   id: string; nome: string; ean?: string; codigo?: string
   preco_venda: number; preco_custo: number; unidade: string
-  estoque: number; categoria?: string; ncm: string; ativo: boolean
+  estoque: number; categoria?: string; ncm: string; cfop: string; cst: string
+  estoque_minimo: number; ativo: boolean
 }
 
-export interface CaixaInfo {
-  id: string; valor_abertura: number; aberto_em: string; operador: string
-}
+export interface ProdutosResponse { produtos: Produto[] }
+export interface VendaResponse { venda: { id: string; numero: number; total: number } }
+export interface CaixaInfo { id: string; valor_abertura: number; aberto_em: string; operador: string }
+export interface CaixaStatusResponse { caixa: CaixaInfo | null; aberto: boolean }
 
 export const api = {
   pdv: {
@@ -38,9 +36,13 @@ export const api = {
   },
   estoque: {
     listar: (q?: string) =>
-      req<ProdutosResponse>(`/api/estoque/produtos${q ? `?q=${q}` : ''}`),
+      req<ProdutosResponse>(`/api/estoque/produtos${q ? `?q=${encodeURIComponent(q)}` : ''}`),
     criarProduto: (body: unknown) =>
       req<{ produto: Produto }>('/api/estoque/produtos', { method: 'POST', body: JSON.stringify(body) }),
+    atualizarProduto: (id: string, body: unknown) =>
+      req<{ produto: Produto }>(`/api/estoque/produtos/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    desativarProduto: (id: string) =>
+      req<{ ok: boolean }>(`/api/estoque/produtos/${id}`, { method: 'DELETE' }),
     entrada: (id: string, quantidade: number, motivo?: string) =>
       req<{ ok: boolean }>(`/api/estoque/produtos/${id}/entrada`, { method: 'POST', body: JSON.stringify({ quantidade, motivo }) }),
   },

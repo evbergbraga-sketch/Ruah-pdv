@@ -21,6 +21,46 @@ const produtoSchema = z.object({
 export async function estoqueRoutes(app: FastifyInstance) {
   app.addHook('onRequest', authenticate)
 
+  // Atualizar produto
+  app.patch('/produtos/:id', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const parsed = produtoSchema.partial().safeParse(req.body)
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.format() })
+
+    const d = parsed.data
+    const produto = await withTenant(req.user.tenantId, async (tx) => {
+      const [p] = await tx`
+        UPDATE produtos SET
+          nome = COALESCE(${d.nome ?? null}, nome),
+          ean = ${d.ean ?? null},
+          codigo = ${d.codigo ?? null},
+          preco_venda = COALESCE(${d.preco_venda ?? null}, preco_venda),
+          preco_custo = COALESCE(${d.preco_custo ?? null}, preco_custo),
+          unidade = COALESCE(${d.unidade ?? null}, unidade),
+          ncm = COALESCE(${d.ncm ?? null}, ncm),
+          cfop = COALESCE(${d.cfop ?? null}, cfop),
+          cst = COALESCE(${d.cst ?? null}, cst),
+          estoque_minimo = COALESCE(${d.estoque_minimo ?? null}, estoque_minimo),
+          updated_at = NOW()
+        WHERE id = ${id}
+        RETURNING *
+      `
+      return p
+    })
+
+    if (!produto) return reply.status(404).send({ error: 'Produto não encontrado' })
+    return reply.send({ produto })
+  })
+
+  // Desativar produto
+  app.delete('/produtos/:id', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    await withTenant(req.user.tenantId, async (tx) => tx`
+      UPDATE produtos SET ativo = false, updated_at = NOW() WHERE id = ${id}
+    `)
+    return reply.send({ ok: true })
+  })
+
   // Criar produto
   app.post('/produtos', async (req, reply) => {
     const parsed = produtoSchema.safeParse(req.body)
