@@ -7,32 +7,87 @@ interface ScannerModalProps {
   onFechar: () => void
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type BarcodeDetectorType = any
+
 export function ScannerModal({ aberto, contexto, onCodigo, onFechar }: ScannerModalProps) {
-  const [aba, setAba] = useState<'camera' | 'usb'>('usb')
+  const [aba, setAba] = useState<'camera' | 'usb'>('camera')
   const [inputManual, setInputManual] = useState('')
   const [erroCamera, setErroCamera] = useState('')
+  const [suporteNativo, setSuporteNativo] = useState(true)
   const videoRef = useRef<HTMLVideoElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const detectorRef = useRef<BarcodeDetectorType>(null)
+  const rafRef = useRef<number>()
+  const lidoRef = useRef(false)
 
   const pararCamera = useCallback(() => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
     streamRef.current?.getTracks().forEach(t => t.stop())
     streamRef.current = null
+    lidoRef.current = false
   }, [])
+
+  const handleLeitura = useCallback((codigo: string) => {
+    if (lidoRef.current) return
+    lidoRef.current = true
+    beep()
+    onCodigo(codigo)
+    onFechar()
+  }, [onCodigo, onFechar])
+
+  // Loop de detecção usando BarcodeDetector nativo (Chrome/Edge)
+  const loopDeteccao = useCallback(async () => {
+    if (!videoRef.current || !detectorRef.current || lidoRef.current) return
+    try {
+      const codes = await detectorRef.current.detect(videoRef.current)
+      if (codes.length > 0) {
+        handleLeitura(codes[0].rawValue)
+        return
+      }
+    } catch {
+      // frame ainda não pronto, ignora
+    }
+    rafRef.current = requestAnimationFrame(loopDeteccao)
+  }, [handleLeitura])
 
   const iniciarCamera = useCallback(async () => {
     setErroCamera('')
+    lidoRef.current = false
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const win = window as any
+    if (!win.BarcodeDetector) {
+      setSuporteNativo(false)
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' }
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
       })
       streamRef.current = stream
-      if (videoRef.current) videoRef.current.srcObject = stream
-    } catch {
-      setErroCamera('Câmera não disponível')
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        await videoRef.current.play()
+      }
+
+      if (win.BarcodeDetector) {
+        detectorRef.current = new win.BarcodeDetector({
+          formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'qr_code'],
+        })
+        rafRef.current = requestAnimationFrame(loopDeteccao)
+      }
+    } catch (e) {
+      const err = e as Error
+      setErroCamera(
+        err.name === 'NotAllowedError'
+          ? 'Permissão de câmera negada'
+          : 'Câmera não disponível neste dispositivo'
+      )
       setAba('usb')
     }
-  }, [])
+  }, [loopDeteccao])
 
   useEffect(() => {
     if (!aberto) { pararCamera(); return }
@@ -50,8 +105,7 @@ export function ScannerModal({ aberto, contexto, onCodigo, onFechar }: ScannerMo
   function confirmar() {
     const cod = inputManual.trim()
     if (cod.length < 2) return
-    onCodigo(cod)
-    onFechar()
+    handleLeitura(cod)
   }
 
   if (!aberto) return null
@@ -88,13 +142,20 @@ export function ScannerModal({ aberto, contexto, onCodigo, onFechar }: ScannerMo
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div className="w-48 h-20 border-2 border-rose rounded-lg relative"
                   style={{ boxShadow: '0 0 0 9999px rgba(0,0,0,0.45)' }}>
-                  <div className="absolute inset-x-0 h-0.5 bg-rose animate-[scan_1.8s_ease-in-out_infinite]"
+                  <div className="absolute inset-x-0 h-0.5 bg-rose"
                     style={{ animation: 'scan 1.8s ease-in-out infinite' }} />
                 </div>
               </div>
             </div>
-            {erroCamera && <p className="text-center text-xs text-red py-3">{erroCamera}</p>}
-            {!erroCamera && <p className="text-center text-xs text-txt3 py-3">Aponte para o código de barras</p>}
+            {erroCamera ? (
+              <p className="text-center text-xs text-red py-3">{erroCamera}</p>
+            ) : !suporteNativo ? (
+              <p className="text-center text-xs text-gold py-3">
+                Seu navegador não decodifica código de barras automaticamente.<br />Use a aba Leitor USB.
+              </p>
+            ) : (
+              <p className="text-center text-xs text-txt3 py-3">Aponte para o código de barras</p>
+            )}
           </div>
         )}
 
@@ -137,4 +198,17 @@ export function ScannerModal({ aberto, contexto, onCodigo, onFechar }: ScannerMo
       <style>{`@keyframes scan { 0%,100%{top:8px} 50%{top:calc(100% - 10px)} }`}</style>
     </div>
   )
+}
+
+function beep() {
+  try {
+    const ctx = new AudioContext()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.connect(gain); gain.connect(ctx.destination)
+    osc.frequency.value = 1760
+    gain.gain.setValueAtTime(0.25, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12)
+    osc.start(); osc.stop(ctx.currentTime + 0.12)
+  } catch { /* sem som */ }
 }
