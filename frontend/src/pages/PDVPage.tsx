@@ -17,7 +17,7 @@ const FORMAS = [
   { id: 'debito',  label: 'Débito',   icon: '🏦' },
 ]
 
-const R = (n: number) => `R$ ${n.toFixed(2).replace('.', ',')}`
+const R = (n: number | string) => `R$ ${Number(n).toFixed(2).replace('.', ',')}`
 
 export function PDVPage() {
   const [busca, setBusca] = useState('')

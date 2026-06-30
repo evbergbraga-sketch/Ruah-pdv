@@ -68,7 +68,7 @@ export const usePDV = create<PDVState>()(
     addProduto: (p, qtd = 1) => set(s => {
       const ex = s.itens.find(i => i.produto.id === p.id)
       if (ex) ex.quantidade += qtd
-      else s.itens.push({ produto: p, quantidade: qtd, preco_unitario: p.preco_venda, desconto_valor: 0 })
+      else s.itens.push({ produto: p, quantidade: qtd, preco_unitario: Number(p.preco_venda), desconto_valor: 0 })
       s.subtotal = calc(s.itens)
       s.total = s.subtotal - s.descontoVenda
     }),
