@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { api, type Produto } from '../lib/api'
+import { ScannerModal } from '../components/shared/ScannerModal'
 
 const EMPTY_FORM = {
   nome: '', ean: '', codigo: '', preco_venda: '', preco_custo: '',
@@ -20,6 +21,7 @@ export function EstoquePage() {
   const [qtdAjuste, setQtdAjuste] = useState('')
   const [motivoAjuste, setMotivoAjuste] = useState('')
   const [excluindo, setExcluindo] = useState<Produto | null>(null)
+  const [scanner, setScanner] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['estoque-produtos', busca],
@@ -121,6 +123,24 @@ export function EstoquePage() {
     ajustarEstoque.mutate({ id: ajustando.id, tipo: tipoAjuste, qtd, motivo: motivoAjuste || undefined })
   }
 
+  function handleScan(codigo: string) {
+    const existente = produtos.find(p => p.ean === codigo)
+    if (existente) {
+      toast.error(`Já cadastrado: ${existente.nome}`)
+      abrirEdicao(existente)
+      return
+    }
+    if (!showForm) {
+      setEditando(null)
+      setForm({ ...EMPTY_FORM, ean: codigo })
+      setEstoqueInicial('0')
+      setShowForm(true)
+    } else {
+      setForm(f => ({ ...f, ean: codigo }))
+    }
+    toast.success('Código preenchido — complete os dados do produto')
+  }
+
   function salvar() {
     if (!form.nome.trim()) return toast.error('Nome é obrigatório')
     if (!form.preco_venda) return toast.error('Preço de venda é obrigatório')
@@ -161,12 +181,20 @@ export function EstoquePage() {
           <h1 className="text-2xl font-extrabold tracking-tight">Estoque</h1>
           <p className="text-sm text-txt3 mt-1">Catálogo e controle de produtos</p>
         </div>
-        <button
-          onClick={abrirNovo}
-          className="px-4 py-2 bg-rose text-white text-sm font-bold rounded-lg hover:bg-rose/90 transition-colors"
-        >
-          + Novo Produto
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setScanner(true)}
+            className="px-4 py-2 bg-rose-dim border border-rose text-rose text-sm font-bold rounded-lg hover:bg-rose hover:text-white transition-all flex items-center gap-2"
+          >
+            📷 Escanear
+          </button>
+          <button
+            onClick={abrirNovo}
+            className="px-4 py-2 bg-rose text-white text-sm font-bold rounded-lg hover:bg-rose/90 transition-colors"
+          >
+            + Novo Produto
+          </button>
+        </div>
       </div>
 
       {/* Métricas */}
@@ -308,13 +336,23 @@ export function EstoquePage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-txt3 uppercase tracking-wider block mb-1.5">EAN / Código de Barras</label>
-                  <input
-                    type="text"
-                    placeholder="7896016100016"
-                    value={form.ean}
-                    onChange={e => setForm(f => ({ ...f, ean: e.target.value }))}
-                    className="w-full bg-bg3 border border-border rounded-lg px-3 py-2.5 text-sm font-mono text-txt outline-none focus:border-rose transition-colors placeholder:text-txt3"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="7896016100016"
+                      value={form.ean}
+                      onChange={e => setForm(f => ({ ...f, ean: e.target.value }))}
+                      className="flex-1 bg-bg3 border border-border rounded-lg px-3 py-2.5 text-sm font-mono text-txt outline-none focus:border-rose transition-colors placeholder:text-txt3"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setScanner(true)}
+                      title="Escanear código de barras"
+                      className="px-3 bg-bg3 border border-border rounded-lg text-txt2 hover:border-rose hover:text-rose transition-colors"
+                    >
+                      📷
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-txt3 uppercase tracking-wider block mb-1.5">Código Interno</label>
@@ -562,6 +600,8 @@ export function EstoquePage() {
           </div>
         </div>
       )}
+
+      <ScannerModal aberto={scanner} contexto="estoque" onCodigo={handleScan} onFechar={() => setScanner(false)} />
     </div>
   )
 }
