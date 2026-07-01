@@ -20,7 +20,7 @@ export function Layout() {
     <div className="min-h-screen flex flex-col">
       <nav className="fixed top-0 left-0 right-0 z-50 h-14 bg-bg/95 backdrop-blur border-b border-border flex items-center px-6 gap-2">
         <div className="flex items-center gap-2 mr-6">
-          <div className="w-2 h-2 rounded-full bg-rose" />
+          <img src="/logo.png" alt="Ruah" className="h-7 w-7 object-contain rounded" />
           <span className="font-extrabold text-sm tracking-tight">Ruah PDV</span>
         </div>
         {navItems.map(({ to, label, Icon }) => (
