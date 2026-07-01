@@ -67,19 +67,12 @@ export function PDVPage() {
   const caixaRef = useRef({ aberto: caixaAberto, id: caixaId })
   useEffect(() => { caixaRef.current = { aberto: caixaAberto, id: caixaId } }, [caixaAberto, caixaId])
 
-  // Ao montar com carrinho vazio → abre scanner automaticamente
-  useEffect(() => {
-    if (itens.length === 0) setScanner(true)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // Ao limpar carrinho (nova venda) → volta pra tela de Nova Venda e abre scanner
+  // Ao limpar carrinho → volta pra tela de Nova Venda
   const prevItensLen = useRef(itens.length)
   useEffect(() => {
     if (prevItensLen.current > 0 && itens.length === 0) {
       setModoGrade(false)
       setBusca('')
-      setTimeout(() => setScanner(true), 200)
     }
     prevItensLen.current = itens.length
   }, [itens.length])
@@ -95,9 +88,7 @@ export function PDVPage() {
 
     if (!caixaRef.current.aberto || !caixaRef.current.id) {
       toast.error('Abra o caixa antes de vender')
-      return
     }
-    setTimeout(() => setPagando(true), 120)
   }, [addProduto])
 
   // Leitor USB: ativo direto na página quando nenhum modal está sobreposto
