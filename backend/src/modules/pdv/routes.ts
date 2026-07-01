@@ -16,6 +16,7 @@ const criarVendaSchema = z.object({
     forma:   z.enum(['dinheiro','credito','debito','pix','voucher']),
     valor:   z.number().positive(),
     bandeira: z.string().optional(),
+    parcelas: z.number().int().min(1).max(12).default(1),
   })).min(1),
   desconto_valor: z.number().min(0).default(0),
   observacoes:    z.string().optional(),
@@ -141,8 +142,8 @@ export async function pdvRoutes(app: FastifyInstance) {
 
         for (const p of pagamentos) {
           await tx`
-            INSERT INTO pagamentos(tenant_id, venda_id, forma, valor, bandeira)
-            VALUES(${req.user.tenantId}, ${v.id}, ${p.forma}, ${p.valor}, ${p.bandeira ?? null})
+            INSERT INTO pagamentos(tenant_id, venda_id, forma, valor, bandeira, parcelas)
+            VALUES(${req.user.tenantId}, ${v.id}, ${p.forma}, ${p.valor}, ${p.bandeira ?? null}, ${p.parcelas ?? 1})
           `
         }
 
@@ -167,7 +168,7 @@ export async function pdvRoutes(app: FastifyInstance) {
           'nome', vi.nome_produto, 'quantidade', vi.quantidade,
           'preco_unitario', vi.preco_unitario, 'subtotal', vi.subtotal
         )) AS itens,
-        json_agg(DISTINCT jsonb_build_object('forma', p.forma, 'valor', p.valor)) AS pagamentos,
+        json_agg(DISTINCT jsonb_build_object('forma', p.forma, 'valor', p.valor, 'parcelas', p.parcelas)) AS pagamentos,
         jsonb_build_object('nome', c.nome, 'cpf', c.cpf) AS cliente,
         t.nome AS loja_nome, t.cnpj AS loja_cnpj,
         t.endereco AS loja_endereco, t.telefone AS loja_telefone

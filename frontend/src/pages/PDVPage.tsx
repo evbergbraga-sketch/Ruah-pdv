@@ -27,9 +27,11 @@ export function PDVPage() {
   const [pagando, setPagando] = useState(false)
   const [forma, setForma] = useState('dinheiro')
   const [recebido, setRecebido] = useState('')
+  const [parcelas, setParcelas] = useState(1)
   const [sucesso, setSucesso] = useState<{ numero: number; total: number; troco: number } | null>(null)
   // false = tela Nova Venda (padrão com carrinho vazio), true = grade de produtos manual
   const [modoGrade, setModoGrade] = useState(false)
+
   const buscaRef = useRef<HTMLInputElement>(null)
 
   const { itens, total, subtotal, descontoVenda, addProduto, remover, setQtd, setDescVenda, limpar } = usePDV()
@@ -115,7 +117,7 @@ export function PDVPage() {
         preco_unitario: i.preco_unitario,
         desconto_valor: i.desconto_valor,
       })),
-      pagamentos: [{ forma, valor: totalPago }],
+      pagamentos: [{ forma, valor: totalPago, parcelas: forma === 'credito' ? parcelas : 1 }],
       desconto_valor: descontoVenda,
     })
   }
@@ -350,7 +352,7 @@ export function PDVPage() {
               {FORMAS.map(f => (
                 <button
                   key={f.id}
-                  onClick={() => setForma(f.id)}
+                  onClick={() => { setForma(f.id); setParcelas(1) }}
                   className={`py-3 rounded-xl border text-sm font-semibold flex flex-col items-center gap-1.5 transition-all ${
                     forma === f.id ? 'bg-rose-dim border-rose text-rose' : 'bg-bg3 border-border text-txt2 hover:text-txt'
                   }`}
@@ -359,6 +361,26 @@ export function PDVPage() {
                 </button>
               ))}
             </div>
+
+            {forma === 'credito' && (
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-txt3 uppercase tracking-wider">Parcelamento</label>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => {
+                    const valorParc = total / n
+                    return (
+                      <button key={n} onClick={() => setParcelas(n)}
+                        className={`py-2 rounded-lg border text-xs font-semibold transition-all flex flex-col items-center gap-0.5 ${
+                          parcelas === n ? 'bg-rose-dim border-rose text-rose' : 'bg-bg3 border-border text-txt2 hover:text-txt'
+                        }`}>
+                        <span className="font-bold">{n === 1 ? 'À vista' : `${n}x`}</span>
+                        {n > 1 && <span className="opacity-70 text-[10px]">R$ {valorParc.toFixed(2).replace('.', ',')}</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {forma === 'dinheiro' && (
               <div className="space-y-2">

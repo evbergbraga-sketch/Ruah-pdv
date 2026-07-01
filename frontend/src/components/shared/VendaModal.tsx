@@ -120,7 +120,7 @@ export function VendaModal({ vendaId, onFechar }: VendaModalProps) {
                   <div key={i} className="flex items-center justify-between text-sm">
                     <span className="flex items-center gap-1.5 text-txt2">
                       {FORMA_ICON[p.forma] ?? <CreditCard size={14} />}
-                      {FORMA_LABEL[p.forma] ?? p.forma}
+                      {FORMA_LABEL[p.forma] ?? p.forma}{p.parcelas > 1 ? ` ${p.parcelas}x` : ''}
                     </span>
                     <span className="font-semibold">{R(p.valor)}</span>
                   </div>
