@@ -99,22 +99,6 @@ export async function caixaRoutes(app: FastifyInstance) {
   app.get('/:id/resumo', async (req, reply) => {
     const { id } = req.params as { id: string }
 
-    const [totais] = await withTenant(req.user.tenantId, async (tx) => tx`
-      SELECT
-        COUNT(DISTINCT v.id)::int                                           AS qtd_vendas,
-        COALESCE(SUM(v.total), 0)                                          AS total_bruto,
-        json_agg(DISTINCT jsonb_build_object(
-          'forma', pg.forma,
-          'valor', COALESCE(SUM(pg.valor) OVER (PARTITION BY pg.forma), 0),
-          'qtd',   COUNT(pg.id)           OVER (PARTITION BY pg.forma)
-        )) FILTER (WHERE pg.forma IS NOT NULL)                             AS por_forma
-      FROM vendas v
-      LEFT JOIN pagamentos pg ON pg.venda_id = v.id
-      WHERE v.caixa_id = ${id} AND v.status = 'finalizada'
-      GROUP BY v.total, pg.forma, pg.valor, pg.id
-    `)
-
-    // Agrega por forma separadamente para evitar duplicatas do window
     const porForma = await withTenant(req.user.tenantId, async (tx) => tx`
       SELECT pg.forma, COUNT(DISTINCT v.id)::int AS qtd, COALESCE(SUM(pg.valor), 0) AS valor
       FROM vendas v
