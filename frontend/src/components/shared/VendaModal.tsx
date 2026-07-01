@@ -27,11 +27,6 @@ export function VendaModal({ vendaId, onFechar }: VendaModalProps) {
 
   async function reimprimir() {
     if (!v) return
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (!(navigator as any).usb) {
-      toast.error('Impressão requer Chrome ou Edge com suporte a WebUSB')
-      return
-    }
     setImprimindo(true)
     try {
       await imprimirCupom(v)

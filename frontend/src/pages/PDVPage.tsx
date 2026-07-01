@@ -106,8 +106,6 @@ export function PDVPage() {
 
   async function imprimirVenda() {
     if (!sucesso?.id) return
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (!(navigator as any).usb) { toast.error('Impressão requer Chrome ou Edge'); return }
     try {
       const data = await api.pdv.buscarVenda(sucesso.id)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
