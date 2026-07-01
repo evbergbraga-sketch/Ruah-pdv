@@ -9,6 +9,7 @@ import { caixaRoutes } from './modules/caixa/routes.js'
 import { fiscalRoutes } from './modules/fiscal/routes.js'
 import { estoqueRoutes } from './modules/estoque/routes.js'
 import { authRoutes } from './modules/auth/routes.js'
+import { relatoriosRoutes } from './modules/relatorios/routes.js'
 
 const isDev = false
 const PORT = Number(process.env.PORT ?? 8010)
@@ -45,7 +46,8 @@ await app.register(authRoutes, { prefix: '/api/auth' })
 await app.register(pdvRoutes,     { prefix: '/api/pdv' })
 await app.register(caixaRoutes,   { prefix: '/api/caixa' })
 await app.register(fiscalRoutes,  { prefix: '/api/fiscal' })
-await app.register(estoqueRoutes, { prefix: '/api/estoque' })
+await app.register(estoqueRoutes,    { prefix: '/api/estoque' })
+await app.register(relatoriosRoutes, { prefix: '/api/relatorios' })
 
 try {
   await app.listen({ port: PORT, host: '0.0.0.0' })

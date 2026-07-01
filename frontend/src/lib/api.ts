@@ -42,6 +42,16 @@ export interface ProdutosResponse { produtos: Produto[] }
 export interface VendaResponse { venda: { id: string; numero: number; total: number } }
 export interface CaixaInfo { id: string; valor_abertura: number; aberto_em: string; operador: string }
 export interface CaixaStatusResponse { caixa: CaixaInfo | null; aberto: boolean }
+export interface CaixaResumo {
+  qtd_vendas: number; total_bruto: number; valor_esperado: number
+  por_forma: { forma: string; qtd: number; valor: number }[]
+}
+export interface RelatorioVendas {
+  periodo: string; qtd_vendas: number; total_bruto: number; ticket_medio: number
+  por_forma: { forma: string; qtd: number; valor: number }[]
+  top_produtos: { nome: string; qtd_vendida: number; total: number }[]
+  vendas: { numero: number; total: number; created_at: string; formas: string }[]
+}
 export interface LoginResponse {
   token: string
   user: { id: string; nome: string; email: string; role: string; empresa: string; tenantId: string }
@@ -88,6 +98,11 @@ export const api = {
     suprimento: (id: string, valor: number, desc?: string) =>
       req<{ movimento: unknown }>(`/api/caixa/${id}/suprimento`, { method: 'POST', body: JSON.stringify({ valor, descricao: desc }) }),
     movimentos: (id: string) => req<{ movimentos: unknown[] }>(`/api/caixa/${id}/movimentos`),
+    resumo: (id: string) => req<CaixaResumo>(`/api/caixa/${id}/resumo`),
+  },
+  relatorios: {
+    vendas: (periodo?: string) =>
+      req<RelatorioVendas>(`/api/relatorios/vendas${periodo ? `?periodo=${periodo}` : ''}`),
   },
   fiscal: {
     emitirNFCe: (venda_id: string) =>

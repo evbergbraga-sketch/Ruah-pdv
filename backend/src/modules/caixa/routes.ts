@@ -94,6 +94,59 @@ export async function caixaRoutes(app: FastifyInstance) {
     return reply.status(201).send({ movimento: mov })
   })
 
+
+  // Resumo do caixa: totais por forma de pagamento e nº de vendas
+  app.get('/:id/resumo', async (req, reply) => {
+    const { id } = req.params as { id: string }
+
+    const [totais] = await withTenant(req.user.tenantId, async (tx) => tx`
+      SELECT
+        COUNT(DISTINCT v.id)::int                                           AS qtd_vendas,
+        COALESCE(SUM(v.total), 0)                                          AS total_bruto,
+        json_agg(DISTINCT jsonb_build_object(
+          'forma', pg.forma,
+          'valor', COALESCE(SUM(pg.valor) OVER (PARTITION BY pg.forma), 0),
+          'qtd',   COUNT(pg.id)           OVER (PARTITION BY pg.forma)
+        )) FILTER (WHERE pg.forma IS NOT NULL)                             AS por_forma
+      FROM vendas v
+      LEFT JOIN pagamentos pg ON pg.venda_id = v.id
+      WHERE v.caixa_id = ${id} AND v.status = 'finalizada'
+      GROUP BY v.total, pg.forma, pg.valor, pg.id
+    `)
+
+    // Agrega por forma separadamente para evitar duplicatas do window
+    const porForma = await withTenant(req.user.tenantId, async (tx) => tx`
+      SELECT pg.forma, COUNT(DISTINCT v.id)::int AS qtd, COALESCE(SUM(pg.valor), 0) AS valor
+      FROM vendas v
+      JOIN pagamentos pg ON pg.venda_id = v.id
+      WHERE v.caixa_id = ${id} AND v.status = 'finalizada'
+      GROUP BY pg.forma
+    `)
+
+    const [caixa] = await withTenant(req.user.tenantId, async (tx) => tx`
+      SELECT valor_abertura FROM caixas WHERE id = ${id}
+    `)
+
+    const totalBruto = await withTenant(req.user.tenantId, async (tx) => tx`
+      SELECT COUNT(*)::int AS qtd, COALESCE(SUM(total), 0) AS total
+      FROM vendas WHERE caixa_id = ${id} AND status = 'finalizada'
+    `)
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dinheiro = (porForma as any[]).find((f: { forma: string }) => f.forma === 'dinheiro')
+    const valorEsperado = Number(caixa?.valor_abertura ?? 0) + Number(dinheiro?.valor ?? 0)
+
+    return reply.send({
+      qtd_vendas:    Number(totalBruto[0]?.qtd ?? 0),
+      total_bruto:   Number(totalBruto[0]?.total ?? 0),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      por_forma:     (porForma as any[]).map((f: { forma: string; qtd: number; valor: number }) => ({
+        forma: f.forma, qtd: Number(f.qtd), valor: Number(f.valor)
+      })),
+      valor_esperado: valorEsperado,
+    })
+  })
+
   // Suprimento
   app.post('/:id/suprimento', async (req, reply) => {
     const body = z.object({ valor: z.number().positive(), descricao: z.string().optional() }).safeParse(req.body)
