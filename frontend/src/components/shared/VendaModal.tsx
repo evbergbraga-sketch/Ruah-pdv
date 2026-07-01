@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
 import { X, Receipt, CreditCard, Banknote, Smartphone, Landmark, Printer } from 'lucide-react'
 import { api } from '../../lib/api'
 import { imprimirCupom } from '../../services/cupom'
@@ -26,12 +27,18 @@ export function VendaModal({ vendaId, onFechar }: VendaModalProps) {
 
   async function reimprimir() {
     if (!v) return
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (!(navigator as any).usb) {
+      toast.error('Impressão requer Chrome ou Edge com suporte a WebUSB')
+      return
+    }
     setImprimindo(true)
     try {
       await imprimirCupom(v)
+      toast.success('Cupom impresso!')
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao imprimir'
-      alert(msg)
+      toast.error(msg)
     } finally {
       setImprimindo(false)
     }
