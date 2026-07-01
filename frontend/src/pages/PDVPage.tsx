@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { Search, ScanLine, ShoppingCart, Package, AlertTriangle, Banknote, Smartphone, CreditCard, Landmark, CheckCircle2, Printer, Plus, X, Minus, ArrowLeft } from 'lucide-react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { api } from '../lib/api'
@@ -12,10 +13,10 @@ interface Produto {
 }
 
 const FORMAS = [
-  { id: 'dinheiro', label: 'Dinheiro', icon: '💵' },
-  { id: 'pix',     label: 'PIX',      icon: '📱' },
-  { id: 'credito', label: 'Crédito',  icon: '💳' },
-  { id: 'debito',  label: 'Débito',   icon: '🏦' },
+  { id: 'dinheiro', label: 'Dinheiro', Icon: Banknote },
+  { id: 'pix',     label: 'PIX',      Icon: Smartphone },
+  { id: 'credito', label: 'Crédito',  Icon: CreditCard },
+  { id: 'debito',  label: 'Débito',   Icon: Landmark },
 ]
 
 const R = (n: number | string) => `R$ ${Number(n).toFixed(2).replace('.', ',')}`
@@ -157,7 +158,7 @@ export function PDVPage() {
             <div className="flex flex-col items-center gap-3 select-none">
               <div className="text-8xl opacity-10">󱨁</div>
               <div className="w-24 h-24 rounded-3xl bg-bg3 border-2 border-dashed border-border flex items-center justify-center">
-                <span className="text-5xl">📷</span>
+                <ScanLine size={44} className="text-txt3" />
               </div>
               <h2 className="text-2xl font-bold text-txt">Nova Venda</h2>
               <p className="text-sm text-txt3 text-center leading-relaxed">
@@ -171,7 +172,7 @@ export function PDVPage() {
               onClick={() => setScanner(true)}
               className="flex items-center gap-3 px-8 py-4 bg-rose text-white font-bold rounded-2xl hover:bg-rose/90 transition-all shadow-lg shadow-rose/20 text-base"
             >
-              📷 Escanear Produto
+              <><ScanLine size={18} /> Escanear Produto</>
               <span className="text-xs font-mono opacity-70 bg-white/20 px-1.5 py-0.5 rounded">F3</span>
             </button>
 
@@ -207,13 +208,13 @@ export function PDVPage() {
                   className="px-3 py-2.5 text-txt3 hover:text-txt transition-colors text-sm"
                   title="Voltar"
                 >
-                  ←
+                  <ArrowLeft size={16} />
                 </button>
               )}
               <input
                 ref={buscaRef}
                 type="text"
-                placeholder="🔍 Buscar produto ou código EAN..."
+                placeholder="Buscar produto ou código EAN..."
                 value={busca}
                 onChange={e => setBusca(e.target.value)}
                 className="flex-1 bg-bg3 border border-border rounded-lg px-4 py-2.5 text-sm text-txt placeholder:text-txt3 outline-none focus:border-rose transition-colors"
@@ -222,7 +223,7 @@ export function PDVPage() {
                 onClick={() => setScanner(true)}
                 className="px-4 py-2.5 bg-rose-dim border border-rose text-rose text-sm font-semibold rounded-lg hover:bg-rose hover:text-white transition-all flex items-center gap-2"
               >
-                📷 <span className="hidden sm:inline">Escanear</span>
+                <ScanLine size={15} /><span className="hidden sm:inline">Escanear</span>
                 <span className="text-xs opacity-60 font-mono">F3</span>
               </button>
             </div>
@@ -231,7 +232,7 @@ export function PDVPage() {
             <div className="flex-1 overflow-y-auto p-4">
               {produtos.length === 0 && !busca ? (
                 <div className="flex flex-col items-center justify-center h-full gap-3 text-txt3">
-                  <div className="text-5xl opacity-20">📦</div>
+                  <Package size={48} className="opacity-20" />
                   <div className="text-sm">Nenhum produto cadastrado</div>
                   <a href="/estoque" className="text-rose text-sm font-semibold hover:underline">Cadastrar produtos →</a>
                 </div>
@@ -278,7 +279,7 @@ export function PDVPage() {
         <div className="flex-1 overflow-y-auto">
           {itens.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-txt3 gap-2">
-              <div className="text-4xl opacity-20">🛒</div>
+              <ShoppingCart size={36} className="opacity-20" />
               <div className="text-sm">Carrinho vazio</div>
             </div>
           ) : itens.map(item => (
@@ -288,11 +289,11 @@ export function PDVPage() {
                 <div className="font-bold text-sm text-rose shrink-0">{R(item.preco_unitario * item.quantidade - item.desconto_valor)}</div>
               </div>
               <div className="flex items-center gap-2 mt-2">
-                <button onClick={() => setQtd(item.produto.id, item.quantidade - 1)} className="w-6 h-6 rounded-md bg-bg3 border border-border text-txt2 text-sm hover:border-rose hover:text-rose transition-colors flex items-center justify-center">−</button>
+                <button onClick={() => setQtd(item.produto.id, item.quantidade - 1)} className="w-6 h-6 rounded-md bg-bg3 border border-border text-txt2 hover:border-rose hover:text-rose transition-colors flex items-center justify-center"><Minus size={12} /></button>
                 <span className="text-sm font-semibold w-6 text-center">{item.quantidade}</span>
-                <button onClick={() => setQtd(item.produto.id, item.quantidade + 1)} className="w-6 h-6 rounded-md bg-bg3 border border-border text-txt2 text-sm hover:border-rose hover:text-rose transition-colors flex items-center justify-center">+</button>
+                <button onClick={() => setQtd(item.produto.id, item.quantidade + 1)} className="w-6 h-6 rounded-md bg-bg3 border border-border text-txt2 hover:border-rose hover:text-rose transition-colors flex items-center justify-center"><Plus size={12} /></button>
                 <span className="text-xs text-txt3 flex-1">× {R(item.preco_unitario)}</span>
-                <button onClick={() => remover(item.produto.id)} className="text-xs text-txt3 hover:text-red transition-colors">✕</button>
+                <button onClick={() => remover(item.produto.id)} className="text-txt3 hover:text-red transition-colors"><X size={13} /></button>
               </div>
             </div>
           ))}
@@ -318,7 +319,7 @@ export function PDVPage() {
         {/* Aviso de caixa fechado */}
         {!caixaAberto && itens.length > 0 && (
           <div className="mx-4 mb-3 px-3 py-2.5 bg-gold/10 border border-gold/30 rounded-lg text-xs text-gold flex items-center gap-2">
-            ⚠️ Caixa fechado — <a href="/caixa" className="font-semibold underline">abra o caixa</a> para vender
+            <AlertTriangle size={14} /> Caixa fechado — <a href="/caixa" className="font-semibold underline">abra o caixa</a> para vender
           </div>
         )}
 
@@ -328,7 +329,7 @@ export function PDVPage() {
           disabled={itens.length === 0 || !caixaAberto}
           className="mx-4 mb-4 py-3.5 bg-rose text-white font-bold text-sm rounded-xl hover:bg-rose/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
         >
-          💳 Ir para Pagamento
+          <CreditCard size={15} /> Ir para Pagamento
           <span className="text-xs font-mono opacity-70 bg-white/10 px-1.5 py-0.5 rounded">F8</span>
         </button>
       </div>
@@ -354,7 +355,7 @@ export function PDVPage() {
                     forma === f.id ? 'bg-rose-dim border-rose text-rose' : 'bg-bg3 border-border text-txt2 hover:text-txt'
                   }`}
                 >
-                  <span className="text-xl">{f.icon}</span>{f.label}
+                  <f.Icon size={18} />{f.label}
                 </button>
               ))}
             </div>
@@ -387,7 +388,7 @@ export function PDVPage() {
                 disabled={finalizar.isPending}
                 className="flex-[2] py-3 bg-green text-white rounded-xl text-sm font-bold hover:bg-green/90 disabled:opacity-50 transition-colors"
               >
-                {finalizar.isPending ? 'Finalizando...' : '✓ Finalizar Venda'}
+                {finalizar.isPending ? 'Finalizando...' : <><CheckCircle2 size={15} /> Finalizar Venda</>}
               </button>
             </div>
           </div>
@@ -397,7 +398,7 @@ export function PDVPage() {
       {/* Sucesso */}
       {sucesso && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex flex-col items-center justify-center gap-5">
-          <div className="text-7xl animate-bounce">✅</div>
+          <CheckCircle2 size={72} className="text-green animate-bounce" />
           <div className="text-3xl font-extrabold text-green">Venda Finalizada!</div>
           <div className="text-txt2 text-lg">Venda #{String(sucesso.numero).padStart(4, '0')} · {R(sucesso.total)}</div>
           {sucesso.troco > 0 && (
@@ -407,12 +408,12 @@ export function PDVPage() {
             </div>
           )}
           <div className="flex gap-3 mt-2">
-            <button className="px-6 py-3 border border-border bg-bg3 text-txt rounded-xl text-sm font-semibold hover:bg-bg4 transition-colors">🖨️ Imprimir</button>
+            <button className="flex items-center gap-2 px-6 py-3 border border-border bg-bg3 text-txt rounded-xl text-sm font-semibold hover:bg-bg4 transition-colors"><Printer size={15} /> Imprimir</button>
             <button
               onClick={() => { setSucesso(null); limpar() }}
               className="px-8 py-3 bg-rose text-white rounded-xl text-sm font-bold hover:bg-rose/90 transition-colors"
             >
-              ➕ Nova Venda
+              <><Plus size={15} /> Nova Venda</>
             </button>
           </div>
         </div>

@@ -42,15 +42,19 @@ export interface ProdutosResponse { produtos: Produto[] }
 export interface VendaResponse { venda: { id: string; numero: number; total: number } }
 export interface CaixaInfo { id: string; valor_abertura: number; aberto_em: string; operador: string }
 export interface CaixaStatusResponse { caixa: CaixaInfo | null; aberto: boolean }
+export interface VendaResumo {
+  id: string; numero: number; total: number; created_at: string; formas: string
+}
 export interface CaixaResumo {
   qtd_vendas: number; total_bruto: number; valor_esperado: number
   por_forma: { forma: string; qtd: number; valor: number }[]
+  vendas: VendaResumo[]
 }
 export interface RelatorioVendas {
   periodo: string; qtd_vendas: number; total_bruto: number; ticket_medio: number
   por_forma: { forma: string; qtd: number; valor: number }[]
   top_produtos: { nome: string; qtd_vendida: number; total: number }[]
-  vendas: { numero: number; total: number; created_at: string; formas: string }[]
+  vendas: VendaResumo[]
 }
 export interface LoginResponse {
   token: string

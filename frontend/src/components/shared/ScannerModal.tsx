@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
+import { Camera, Plug, X, Lightbulb, ScanLine } from 'lucide-react'
 
 interface ScannerModalProps {
   aberto: boolean
@@ -37,41 +38,27 @@ export function ScannerModal({ aberto, contexto, onCodigo, onFechar }: ScannerMo
     onFechar()
   }, [onCodigo, onFechar])
 
-  // Loop de detecção usando BarcodeDetector nativo (Chrome/Edge)
   const loopDeteccao = useCallback(async () => {
     if (!videoRef.current || !detectorRef.current || lidoRef.current) return
     try {
       const codes = await detectorRef.current.detect(videoRef.current)
-      if (codes.length > 0) {
-        handleLeitura(codes[0].rawValue)
-        return
-      }
-    } catch {
-      // frame ainda não pronto, ignora
-    }
+      if (codes.length > 0) { handleLeitura(codes[0].rawValue); return }
+    } catch { /* frame não pronto */ }
     rafRef.current = requestAnimationFrame(loopDeteccao)
   }, [handleLeitura])
 
   const iniciarCamera = useCallback(async () => {
     setErroCamera('')
     lidoRef.current = false
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const win = window as any
-    if (!win.BarcodeDetector) {
-      setSuporteNativo(false)
-    }
-
+    if (!win.BarcodeDetector) setSuporteNativo(false)
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
       })
       streamRef.current = stream
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        await videoRef.current.play()
-      }
-
+      if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play() }
       if (win.BarcodeDetector) {
         detectorRef.current = new win.BarcodeDetector({
           formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'qr_code'],
@@ -80,24 +67,15 @@ export function ScannerModal({ aberto, contexto, onCodigo, onFechar }: ScannerMo
       }
     } catch (e) {
       const err = e as Error
-      setErroCamera(
-        err.name === 'NotAllowedError'
-          ? 'Permissão de câmera negada'
-          : 'Câmera não disponível neste dispositivo'
-      )
+      setErroCamera(err.name === 'NotAllowedError' ? 'Permissão de câmera negada' : 'Câmera não disponível')
       setAba('usb')
     }
   }, [loopDeteccao])
 
-  // Sempre que o modal abre (transição fechado -> aberto), garante que
-  // a sessão comece na aba câmera, mesmo que a última sessão tenha
-  // terminado na aba USB/Manual.
   const estavaAbertoRef = useRef(false)
   useEffect(() => {
     if (aberto && !estavaAbertoRef.current) {
-      setAba('camera')
-      setErroCamera('')
-      setInputManual('')
+      setAba('camera'); setErroCamera(''); setInputManual('')
     }
     estavaAbertoRef.current = aberto
   }, [aberto])
@@ -109,12 +87,7 @@ export function ScannerModal({ aberto, contexto, onCodigo, onFechar }: ScannerMo
     return pararCamera
   }, [aberto, aba, iniciarCamera, pararCamera])
 
-  function trocarAba(nova: 'camera' | 'usb') {
-    pararCamera()
-    setAba(nova)
-    setInputManual('')
-  }
-
+  function trocarAba(nova: 'camera' | 'usb') { pararCamera(); setAba(nova); setInputManual('') }
   function confirmar() {
     const cod = inputManual.trim()
     if (cod.length < 2) return
@@ -129,25 +102,27 @@ export function ScannerModal({ aberto, contexto, onCodigo, onFechar }: ScannerMo
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
       onClick={e => e.target === e.currentTarget && onFechar()}>
       <div className="bg-bg2 border border-border rounded-2xl w-full max-w-md overflow-hidden">
-        {/* Header */}
+
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h2 className="text-sm font-bold">📷 {titulo}</h2>
-          <button onClick={onFechar} className="text-txt3 hover:text-txt text-xl leading-none transition-colors">×</button>
+          <h2 className="flex items-center gap-2 text-sm font-bold">
+            <ScanLine size={15} className="text-rose" />{titulo}
+          </h2>
+          <button onClick={onFechar} className="text-txt3 hover:text-txt transition-colors">
+            <X size={18} />
+          </button>
         </div>
 
-        {/* Abas */}
         <div className="flex gap-2 px-4 py-3 border-b border-border">
           {(['camera', 'usb'] as const).map(a => (
             <button key={a} onClick={() => trocarAba(a)}
-              className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold transition-all ${
                 aba === a ? 'bg-rose-dim border border-rose text-rose' : 'bg-bg3 border border-border text-txt2'
               }`}>
-              {a === 'camera' ? '📷 Câmera' : '🔌 Leitor USB / Manual'}
+              {a === 'camera' ? <><Camera size={13} /> Câmera</> : <><Plug size={13} /> Leitor USB / Manual</>}
             </button>
           ))}
         </div>
 
-        {/* Câmera */}
         {aba === 'camera' && (
           <div>
             <div className="relative bg-black h-52 overflow-hidden">
@@ -164,7 +139,7 @@ export function ScannerModal({ aberto, contexto, onCodigo, onFechar }: ScannerMo
               <p className="text-center text-xs text-red py-3">{erroCamera}</p>
             ) : !suporteNativo ? (
               <p className="text-center text-xs text-gold py-3">
-                Seu navegador não decodifica código de barras automaticamente.<br />Use a aba Leitor USB.
+                Navegador sem suporte a decodificação.<br />Use a aba Leitor USB.
               </p>
             ) : (
               <p className="text-center text-xs text-txt3 py-3">Aponte para o código de barras</p>
@@ -172,42 +147,37 @@ export function ScannerModal({ aberto, contexto, onCodigo, onFechar }: ScannerMo
           </div>
         )}
 
-        {/* USB / Manual */}
         {aba === 'usb' && (
           <div className="flex flex-col items-center gap-4 px-6 py-6">
-            <div className="text-4xl opacity-30">🔌</div>
+            <Plug size={36} className="opacity-20" />
             <p className="text-sm text-txt2 text-center leading-relaxed">
               Conecte seu leitor USB e passe o produto.<br />
               <span className="text-txt3 text-xs">Ou digite o código abaixo</span>
             </p>
             <div className="w-full flex gap-2">
-              <input
-                ref={inputRef}
-                type="text"
-                value={inputManual}
+              <input ref={inputRef} type="text" value={inputManual}
                 onChange={e => setInputManual(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && confirmar()}
                 placeholder="EAN ou código interno"
-                className="flex-1 bg-bg3 border-2 border-rose rounded-lg px-4 py-3 text-lg font-bold text-center tracking-widest font-mono text-txt outline-none placeholder:text-txt3 placeholder:text-sm placeholder:tracking-normal placeholder:font-sans"
-              />
+                className="flex-1 bg-bg3 border-2 border-rose rounded-lg px-4 py-3 text-lg font-bold text-center tracking-widest font-mono text-txt outline-none placeholder:text-txt3 placeholder:text-sm placeholder:tracking-normal placeholder:font-sans" />
               <button onClick={confirmar} disabled={inputManual.trim().length < 2}
                 className="px-4 py-3 bg-rose text-white font-bold rounded-lg disabled:opacity-40 hover:bg-rose/90 transition-colors">
                 OK
               </button>
             </div>
-            <p className="text-xs text-txt3">💡 Leitores USB digitam o código automaticamente</p>
+            <p className="flex items-center gap-1.5 text-xs text-txt3">
+              <Lightbulb size={12} /> Leitores USB digitam o código automaticamente
+            </p>
           </div>
         )}
 
-        {/* Footer */}
         <div className="flex gap-2 px-4 py-3 border-t border-border justify-end">
           <button onClick={onFechar}
-            className="px-5 py-2 rounded-lg border border-border text-sm font-semibold text-txt2 hover:text-red hover:border-red transition-colors">
-            Fechar <span className="text-xs opacity-50 ml-1 font-mono">[Esc]</span>
+            className="flex items-center gap-1.5 px-5 py-2 rounded-lg border border-border text-sm font-semibold text-txt2 hover:text-red hover:border-red transition-colors">
+            <X size={13} /> Fechar <span className="text-xs opacity-50 ml-1 font-mono">[Esc]</span>
           </button>
         </div>
       </div>
-
       <style>{`@keyframes scan { 0%,100%{top:8px} 50%{top:calc(100% - 10px)} }`}</style>
     </div>
   )

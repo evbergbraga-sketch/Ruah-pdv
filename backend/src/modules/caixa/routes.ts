@@ -120,6 +120,16 @@ export async function caixaRoutes(app: FastifyInstance) {
     const dinheiro = (porForma as any[]).find((f: { forma: string }) => f.forma === 'dinheiro')
     const valorEsperado = Number(caixa?.valor_abertura ?? 0) + Number(dinheiro?.valor ?? 0)
 
+    const vendasSessao = await withTenant(req.user.tenantId, async (tx) => tx`
+      SELECT v.id, v.numero, v.total, v.created_at,
+             STRING_AGG(DISTINCT pg.forma, ', ') AS formas
+      FROM vendas v
+      LEFT JOIN pagamentos pg ON pg.venda_id = v.id
+      WHERE v.caixa_id = ${id} AND v.status = 'finalizada'
+      GROUP BY v.id, v.numero, v.total, v.created_at
+      ORDER BY v.created_at DESC
+    `)
+
     return reply.send({
       qtd_vendas:    Number(totalBruto[0]?.qtd ?? 0),
       total_bruto:   Number(totalBruto[0]?.total ?? 0),
@@ -128,6 +138,11 @@ export async function caixaRoutes(app: FastifyInstance) {
         forma: f.forma, qtd: Number(f.qtd), valor: Number(f.valor)
       })),
       valor_esperado: valorEsperado,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      vendas: (vendasSessao as any[]).map((v) => ({
+        id: v.id as string, numero: v.numero as number,
+        total: Number(v.total), created_at: v.created_at as string, formas: v.formas as string,
+      })),
     })
   })
 
