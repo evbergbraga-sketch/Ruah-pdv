@@ -6,6 +6,7 @@ import { api } from '../lib/api'
 import { usePDV } from '../store/pdv'
 import { ScannerModal } from '../components/shared/ScannerModal'
 import { useBarcode } from '../hooks/useBarcode'
+import { imprimirCupom } from '../services/cupom'
 
 interface Produto {
   id: string; nome: string; ean?: string; codigo?: string
@@ -28,7 +29,7 @@ export function PDVPage() {
   const [forma, setForma] = useState('dinheiro')
   const [recebido, setRecebido] = useState('')
   const [parcelas, setParcelas] = useState(1)
-  const [sucesso, setSucesso] = useState<{ numero: number; total: number; troco: number } | null>(null)
+  const [sucesso, setSucesso] = useState<{ id: string; numero: number; total: number; troco: number } | null>(null)
   // false = tela Nova Venda (padrão com carrinho vazio), true = grade de produtos manual
   const [modoGrade, setModoGrade] = useState(false)
 
@@ -53,8 +54,8 @@ export function PDVPage() {
   const finalizar = useMutation({
     mutationFn: (body: unknown) => api.pdv.criarVenda(body),
     onSuccess: (res: unknown) => {
-      const r = res as { venda: { numero: number; total: number } }
-      setSucesso({ numero: r.venda.numero, total: r.venda.total, troco: Math.max(0, parseFloat(recebido || '0') - r.venda.total) })
+      const r = res as { venda: { id: string; numero: number; total: number } }
+      setSucesso({ id: r.venda.id, numero: r.venda.numero, total: r.venda.total, troco: Math.max(0, parseFloat(recebido || '0') - r.venda.total) })
       setPagando(false)
     },
     onError: (e: Error) => toast.error(e.message),
@@ -102,6 +103,20 @@ export function PDVPage() {
 
   // Leitor USB: ativo direto na página quando nenhum modal está sobreposto
   useBarcode(handleScan, !scanner && !pagando && !sucesso)
+
+  async function imprimirVenda() {
+    if (!sucesso?.id) return
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (!(navigator as any).usb) { toast.error('Impressão requer Chrome ou Edge'); return }
+    try {
+      const data = await api.pdv.buscarVenda(sucesso.id)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await imprimirCupom((data as any).venda)
+      toast.success('Cupom impresso!')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Erro ao imprimir')
+    }
+  }
 
   function confirmarPagamento() {
     if (itens.length === 0) return
@@ -430,7 +445,7 @@ export function PDVPage() {
             </div>
           )}
           <div className="flex gap-3 mt-2">
-            <button className="flex items-center gap-2 px-6 py-3 border border-border bg-bg3 text-txt rounded-xl text-sm font-semibold hover:bg-bg4 transition-colors"><Printer size={15} /> Imprimir</button>
+            <button onClick={imprimirVenda} className="flex items-center gap-2 px-6 py-3 border border-border bg-bg3 text-txt rounded-xl text-sm font-semibold hover:bg-bg4 transition-colors"><Printer size={15} /> Imprimir</button>
             <button
               onClick={() => { setSucesso(null); limpar() }}
               className="px-8 py-3 bg-rose text-white rounded-xl text-sm font-bold hover:bg-rose/90 transition-colors"

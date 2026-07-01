@@ -136,6 +136,22 @@ export function VendaModal({ vendaId, onFechar }: VendaModalProps) {
             </>
           )}
         </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-5 py-3 border-t border-border shrink-0">
+          <button
+            onClick={reimprimir}
+            disabled={!v || imprimindo}
+            title="Requer Chrome/Edge com impressora USB conectada"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-sm font-semibold text-txt2 hover:text-txt hover:border-rose hover:bg-rose-dim transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Printer size={14} />
+            {imprimindo ? 'Imprimindo...' : 'Reimprimir'}
+          </button>
+          <button onClick={onFechar} className="text-txt3 hover:text-txt transition-colors p-1 rounded-lg hover:bg-bg3">
+            <X size={18} />
+          </button>
+        </div>
       </div>
     </div>
   )
