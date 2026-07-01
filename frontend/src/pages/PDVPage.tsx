@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { api } from '../lib/api'
 import { usePDV } from '../store/pdv'
 import { ScannerModal } from '../components/shared/ScannerModal'
+import { useBarcode } from '../hooks/useBarcode'
 
 interface Produto {
   id: string; nome: string; ean?: string; codigo?: string
@@ -26,6 +27,8 @@ export function PDVPage() {
   const [forma, setForma] = useState('dinheiro')
   const [recebido, setRecebido] = useState('')
   const [sucesso, setSucesso] = useState<{ numero: number; total: number; troco: number } | null>(null)
+  // false = tela Nova Venda (padrão com carrinho vazio), true = grade de produtos manual
+  const [modoGrade, setModoGrade] = useState(false)
   const buscaRef = useRef<HTMLInputElement>(null)
 
   const { itens, total, subtotal, descontoVenda, addProduto, remover, setQtd, setDescVenda, limpar } = usePDV()
@@ -56,11 +59,49 @@ export function PDVPage() {
 
   const produtos: Produto[] = (data as { produtos: Produto[] })?.produtos ?? []
 
-  function handleScan(codigo: string) {
-    const prod = produtos.find(p => p.ean === codigo || p.codigo === codigo)
-    if (prod) { addProduto(prod); toast.success(`✓ ${prod.nome}`) }
-    else toast.error(`Produto não encontrado: ${codigo}`)
-  }
+  // Ref para sempre ter o array de produtos mais recente dentro do callback estável
+  const produtosRef = useRef<Produto[]>(produtos)
+  useEffect(() => { produtosRef.current = produtos }, [produtos])
+
+  // Ref para caixaAberto/caixaId — mesmo motivo
+  const caixaRef = useRef({ aberto: caixaAberto, id: caixaId })
+  useEffect(() => { caixaRef.current = { aberto: caixaAberto, id: caixaId } }, [caixaAberto, caixaId])
+
+  // Ao montar com carrinho vazio → abre scanner automaticamente
+  useEffect(() => {
+    if (itens.length === 0) setScanner(true)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Ao limpar carrinho (nova venda) → volta pra tela de Nova Venda e abre scanner
+  const prevItensLen = useRef(itens.length)
+  useEffect(() => {
+    if (prevItensLen.current > 0 && itens.length === 0) {
+      setModoGrade(false)
+      setBusca('')
+      setTimeout(() => setScanner(true), 200)
+    }
+    prevItensLen.current = itens.length
+  }, [itens.length])
+
+  const handleScan = useCallback((codigo: string) => {
+    const prod = produtosRef.current.find(p => p.ean === codigo || p.codigo === codigo)
+    if (!prod) {
+      toast.error(`Produto não encontrado: ${codigo}`)
+      return
+    }
+    addProduto(prod)
+    toast.success(`✓ ${prod.nome}`)
+
+    if (!caixaRef.current.aberto || !caixaRef.current.id) {
+      toast.error('Abra o caixa antes de vender')
+      return
+    }
+    setTimeout(() => setPagando(true), 120)
+  }, [addProduto])
+
+  // Leitor USB: ativo direto na página quando nenhum modal está sobreposto
+  useBarcode(handleScan, !scanner && !pagando && !sucesso)
 
   function confirmarPagamento() {
     if (itens.length === 0) return
@@ -94,63 +135,137 @@ export function PDVPage() {
 
   const troco = Math.max(0, parseFloat(recebido || '0') - total)
 
+  // Tela Nova Venda (carrinho vazio e não está no modo grade manual)
+  const telaNovaVenda = itens.length === 0 && !modoGrade
+
   return (
     <div className="flex h-[calc(100vh-56px)]">
-      {/* Esquerda — produtos */}
+      {/* Esquerda */}
       <div className="flex-1 flex flex-col border-r border-border overflow-hidden">
-        {/* Search */}
-        <div className="p-4 border-b border-border flex gap-2">
-          <input
-            ref={buscaRef}
-            type="text"
-            placeholder="🔍 Buscar produto ou código EAN..."
-            value={busca}
-            onChange={e => setBusca(e.target.value)}
-            className="flex-1 bg-bg3 border border-border rounded-lg px-4 py-2.5 text-sm text-txt placeholder:text-txt3 outline-none focus:border-rose transition-colors"
-          />
-          <button
-            onClick={() => setScanner(true)}
-            className="px-4 py-2.5 bg-rose-dim border border-rose text-rose text-sm font-semibold rounded-lg hover:bg-rose hover:text-white transition-all flex items-center gap-2"
-          >
-            📷 <span className="hidden sm:inline">Escanear</span>
-            <span className="text-xs opacity-60 font-mono">F3</span>
-          </button>
-        </div>
 
-        {/* Grade de produtos */}
-        <div className="flex-1 overflow-y-auto p-4">
-          {produtos.length === 0 && !busca ? (
-            <div className="flex flex-col items-center justify-center h-full gap-3 text-txt3">
-              <div className="text-5xl opacity-20">📦</div>
-              <div className="text-sm">Nenhum produto cadastrado</div>
-              <a href="/estoque" className="text-rose text-sm font-semibold hover:underline">Cadastrar produtos →</a>
+        {/* ── TELA NOVA VENDA ── */}
+        {telaNovaVenda ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-6 px-8">
+            {/* Status caixa */}
+            <div className={`flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full border ${
+              caixaAberto
+                ? 'bg-green-dim border-green/30 text-green'
+                : 'bg-gold/10 border-gold/30 text-gold'
+            }`}>
+              <span className={`w-2 h-2 rounded-full ${caixaAberto ? 'bg-green' : 'bg-gold'}`} />
+              {caixaAberto ? 'Caixa aberto' : 'Caixa fechado'}
             </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-              {produtos.filter(p => p.estoque > 0 || !busca).map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => addProduto(p)}
-                  disabled={p.estoque === 0}
-                  className="bg-bg2 border border-border rounded-xl p-4 text-left hover:border-rose hover:bg-bg3 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-rose/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0"
-                >
-                  <div className="text-sm font-semibold leading-tight mb-2">{p.nome}</div>
-                  <div className="text-rose font-bold text-base">{R(p.preco_venda)}</div>
-                  <div className={`text-xs mt-1 ${p.estoque <= 5 ? 'text-gold' : 'text-txt3'}`}>
-                    {p.estoque === 0 ? '❌ Sem estoque' : `${p.estoque} un`}
-                  </div>
-                </button>
+
+            {/* Ícone de scan */}
+            <div className="flex flex-col items-center gap-3 select-none">
+              <div className="text-8xl opacity-10">󱨁</div>
+              <div className="w-24 h-24 rounded-3xl bg-bg3 border-2 border-dashed border-border flex items-center justify-center">
+                <span className="text-5xl">📷</span>
+              </div>
+              <h2 className="text-2xl font-bold text-txt">Nova Venda</h2>
+              <p className="text-sm text-txt3 text-center leading-relaxed">
+                Passe o produto no leitor ou escaneie pela câmera.<br />
+                O pagamento abre automaticamente.
+              </p>
+            </div>
+
+            {/* Botão scanner */}
+            <button
+              onClick={() => setScanner(true)}
+              className="flex items-center gap-3 px-8 py-4 bg-rose text-white font-bold rounded-2xl hover:bg-rose/90 transition-all shadow-lg shadow-rose/20 text-base"
+            >
+              📷 Escanear Produto
+              <span className="text-xs font-mono opacity-70 bg-white/20 px-1.5 py-0.5 rounded">F3</span>
+            </button>
+
+            {!caixaAberto && (
+              <a href="/caixa" className="text-sm text-gold font-semibold hover:underline">
+                ⚠️ Abrir o caixa primeiro →
+              </a>
+            )}
+
+            {/* Link para busca manual */}
+            <button
+              onClick={() => { setModoGrade(true); setTimeout(() => buscaRef.current?.focus(), 50) }}
+              className="text-xs text-txt3 hover:text-txt transition-colors underline underline-offset-2"
+            >
+              ou buscar produto manualmente
+            </button>
+
+            {/* Atalhos */}
+            <div className="flex gap-4 text-xs text-txt3 mt-4">
+              {[['F3', 'Scanner'], ['F8', 'Pagar']].map(([k, l]) => (
+                <span key={k}><span className="font-mono bg-bg3 border border-border px-1.5 py-0.5 rounded text-txt2">{k}</span> {l}</span>
               ))}
             </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          /* ── MODO GRADE (busca manual ou carrinho com itens) ── */
+          <>
+            {/* Search */}
+            <div className="p-4 border-b border-border flex gap-2">
+              {itens.length === 0 && (
+                <button
+                  onClick={() => setModoGrade(false)}
+                  className="px-3 py-2.5 text-txt3 hover:text-txt transition-colors text-sm"
+                  title="Voltar"
+                >
+                  ←
+                </button>
+              )}
+              <input
+                ref={buscaRef}
+                type="text"
+                placeholder="🔍 Buscar produto ou código EAN..."
+                value={busca}
+                onChange={e => setBusca(e.target.value)}
+                className="flex-1 bg-bg3 border border-border rounded-lg px-4 py-2.5 text-sm text-txt placeholder:text-txt3 outline-none focus:border-rose transition-colors"
+              />
+              <button
+                onClick={() => setScanner(true)}
+                className="px-4 py-2.5 bg-rose-dim border border-rose text-rose text-sm font-semibold rounded-lg hover:bg-rose hover:text-white transition-all flex items-center gap-2"
+              >
+                📷 <span className="hidden sm:inline">Escanear</span>
+                <span className="text-xs opacity-60 font-mono">F3</span>
+              </button>
+            </div>
 
-        {/* Atalhos */}
-        <div className="px-4 py-2 border-t border-border flex gap-4 text-xs text-txt3">
-          {[['F2', 'Nova venda'], ['F3', 'Scanner'], ['F8', 'Pagar']].map(([k, l]) => (
-            <span key={k}><span className="font-mono bg-bg3 border border-border px-1.5 py-0.5 rounded text-txt2">{k}</span> {l}</span>
-          ))}
-        </div>
+            {/* Grade de produtos */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {produtos.length === 0 && !busca ? (
+                <div className="flex flex-col items-center justify-center h-full gap-3 text-txt3">
+                  <div className="text-5xl opacity-20">📦</div>
+                  <div className="text-sm">Nenhum produto cadastrado</div>
+                  <a href="/estoque" className="text-rose text-sm font-semibold hover:underline">Cadastrar produtos →</a>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                  {produtos.filter(p => p.estoque > 0 || !busca).map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => addProduto(p)}
+                      disabled={p.estoque === 0}
+                      className="bg-bg2 border border-border rounded-xl p-4 text-left hover:border-rose hover:bg-bg3 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-rose/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+                    >
+                      <div className="text-sm font-semibold leading-tight mb-2">{p.nome}</div>
+                      <div className="text-rose font-bold text-base">{R(p.preco_venda)}</div>
+                      <div className={`text-xs mt-1 ${p.estoque <= 5 ? 'text-gold' : 'text-txt3'}`}>
+                        {p.estoque === 0 ? '❌ Sem estoque' : `${p.estoque} un`}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Atalhos */}
+            <div className="px-4 py-2 border-t border-border flex gap-4 text-xs text-txt3">
+              {[['F2', 'Nova venda'], ['F3', 'Scanner'], ['F8', 'Pagar']].map(([k, l]) => (
+                <span key={k}><span className="font-mono bg-bg3 border border-border px-1.5 py-0.5 rounded text-txt2">{k}</span> {l}</span>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Direita — carrinho */}
@@ -167,7 +282,7 @@ export function PDVPage() {
           {itens.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-txt3 gap-2">
               <div className="text-4xl opacity-20">🛒</div>
-              <div className="text-sm">Clique em um produto</div>
+              <div className="text-sm">Carrinho vazio</div>
             </div>
           ) : itens.map(item => (
             <div key={item.produto.id} className="px-4 py-3 border-b border-border">
@@ -204,7 +319,7 @@ export function PDVPage() {
         )}
 
         {/* Aviso de caixa fechado */}
-        {!caixaAberto && (
+        {!caixaAberto && itens.length > 0 && (
           <div className="mx-4 mb-3 px-3 py-2.5 bg-gold/10 border border-gold/30 rounded-lg text-xs text-gold flex items-center gap-2">
             ⚠️ Caixa fechado — <a href="/caixa" className="font-semibold underline">abra o caixa</a> para vender
           </div>

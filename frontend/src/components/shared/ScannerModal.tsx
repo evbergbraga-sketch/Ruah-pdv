@@ -89,6 +89,19 @@ export function ScannerModal({ aberto, contexto, onCodigo, onFechar }: ScannerMo
     }
   }, [loopDeteccao])
 
+  // Sempre que o modal abre (transição fechado -> aberto), garante que
+  // a sessão comece na aba câmera, mesmo que a última sessão tenha
+  // terminado na aba USB/Manual.
+  const estavaAbertoRef = useRef(false)
+  useEffect(() => {
+    if (aberto && !estavaAbertoRef.current) {
+      setAba('camera')
+      setErroCamera('')
+      setInputManual('')
+    }
+    estavaAbertoRef.current = aberto
+  }, [aberto])
+
   useEffect(() => {
     if (!aberto) { pararCamera(); return }
     if (aba === 'camera') iniciarCamera()
