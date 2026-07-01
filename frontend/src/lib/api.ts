@@ -31,6 +31,36 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
+function getSuperAdminToken(): string | null {
+  try {
+    const raw = localStorage.getItem('ruah-superadmin-auth')
+    if (!raw) return null
+    return JSON.parse(raw).state?.token ?? null
+  } catch {
+    return null
+  }
+}
+
+async function reqSuperAdmin<T>(path: string, opts?: RequestInit): Promise<T> {
+  const token = getSuperAdminToken()
+  const res = await fetch(`${BASE}${path}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    ...opts,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText })) as { error: string }
+    if (res.status === 401) {
+      localStorage.removeItem('ruah-superadmin-auth')
+      window.location.href = '/superadmin/login'
+    }
+    throw new Error(err.error ?? 'Erro desconhecido')
+  }
+  return res.json() as Promise<T>
+}
+
 export interface Produto {
   id: string; nome: string; ean?: string; codigo?: string
   preco_venda: number; preco_custo: number; unidade: string
@@ -55,6 +85,12 @@ export interface RelatorioVendas {
   por_forma: { forma: string; qtd: number; valor: number }[]
   top_produtos: { nome: string; qtd_vendida: number; total: number }[]
   vendas: VendaResumo[]
+}
+export interface Empresa {
+  id: string; nome: string; cnpj: string; razaoSocial: string
+  email: string; telefone?: string; plano: string; ativo: boolean
+  limiteUsuarios: number; permiteCrm: boolean; permiteMensagens: boolean
+  permiteCupomFiscal: boolean; qtdUsuarios: number; createdAt: string
 }
 export interface LoginResponse {
   token: string
@@ -107,6 +143,24 @@ export const api = {
   relatorios: {
     vendas: (periodo?: string) =>
       req<RelatorioVendas>(`/api/relatorios/vendas${periodo ? `?periodo=${periodo}` : ''}`),
+  },
+  superadmin: {
+    login: (email: string, senha: string) =>
+      reqSuperAdmin<{ token: string; admin: { nome: string; email: string } }>('/api/superadmin/login', {
+        method: 'POST', body: JSON.stringify({ email, senha }),
+      }),
+    me: () => reqSuperAdmin<{ admin: { nome: string; email: string } }>('/api/superadmin/me'),
+    listarEmpresas: () => reqSuperAdmin<{ empresas: Empresa[] }>('/api/superadmin/empresas'),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    criarEmpresa: (body: any) =>
+      reqSuperAdmin<{ empresa: string; mensagem: string }>('/api/superadmin/empresas', {
+        method: 'POST', body: JSON.stringify(body),
+      }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    editarEmpresa: (id: string, body: any) =>
+      reqSuperAdmin<{ ok: boolean }>(`/api/superadmin/empresas/${id}`, {
+        method: 'PATCH', body: JSON.stringify(body),
+      }),
   },
   fiscal: {
     emitirNFCe: (venda_id: string) =>

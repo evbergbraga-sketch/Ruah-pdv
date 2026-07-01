@@ -8,12 +8,20 @@ import { EstoquePage } from './pages/EstoquePage'
 import { CaixaPage } from './pages/CaixaPage'
 import { ClientesPage } from './pages/ClientesPage'
 import { RelatoriosPage } from './pages/RelatoriosPage'
+import { SuperAdminLoginPage } from './pages/superadmin/SuperAdminLoginPage'
+import { SuperAdminDashboard } from './pages/superadmin/SuperAdminDashboard'
+import { RequireSuperAdmin } from './components/shared/RequireSuperAdmin'
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/registro" element={<RegistroPage />} />
+
+      <Route path="/superadmin/login" element={<SuperAdminLoginPage />} />
+      <Route element={<RequireSuperAdmin />}>
+        <Route path="/superadmin" element={<SuperAdminDashboard />} />
+      </Route>
 
       <Route element={<RequireAuth />}>
         <Route element={<Layout />}>

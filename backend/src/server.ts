@@ -10,6 +10,7 @@ import { fiscalRoutes } from './modules/fiscal/routes.js'
 import { estoqueRoutes } from './modules/estoque/routes.js'
 import { authRoutes } from './modules/auth/routes.js'
 import { relatoriosRoutes } from './modules/relatorios/routes.js'
+import { superadminRoutes } from './modules/superadmin/routes.js'
 
 const isDev = false
 const PORT = Number(process.env.PORT ?? 8010)
@@ -41,6 +42,7 @@ app.get('/health', async (_, reply) => {
 
 // Rotas públicas (sem autenticação)
 await app.register(authRoutes, { prefix: '/api/auth' })
+await app.register(superadminRoutes, { prefix: '/api/superadmin' })
 
 // Rotas protegidas (exigem token válido)
 await app.register(pdvRoutes,     { prefix: '/api/pdv' })
