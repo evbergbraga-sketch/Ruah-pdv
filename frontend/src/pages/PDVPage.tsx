@@ -78,7 +78,13 @@ export function PDVPage() {
   }, [itens.length])
 
   const handleScan = useCallback((codigo: string) => {
-    const prod = produtosRef.current.find(p => p.ean === codigo || p.codigo === codigo)
+    // Alguns leitores USB enviam EAN-13 com 12 dígitos (cortam o 1º dígito).
+    // ean.endsWith(codigo) cobre esse caso de forma genérica.
+    const prod = produtosRef.current.find(p => {
+      const ean = p.ean?.trim() ?? ''
+      return ean === codigo || p.codigo === codigo ||
+        (codigo.length === 12 && ean.length === 13 && ean.endsWith(codigo))
+    })
     if (!prod) {
       toast.error(`Produto não encontrado: ${codigo}`)
       return
