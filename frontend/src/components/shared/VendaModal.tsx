@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { X, Receipt, CreditCard, Banknote, Smartphone, Landmark } from 'lucide-react'
+import { X, Receipt, CreditCard, Banknote, Smartphone, Landmark, Printer } from 'lucide-react'
 import { api } from '../../lib/api'
+import { imprimirCupom } from '../../services/cupom'
 
 interface VendaModalProps {
   vendaId: string | null
@@ -20,6 +22,21 @@ const FORMA_LABEL: Record<string, string> = {
 }
 
 export function VendaModal({ vendaId, onFechar }: VendaModalProps) {
+  const [imprimindo, setImprimindo] = useState(false)
+
+  async function reimprimir() {
+    if (!v) return
+    setImprimindo(true)
+    try {
+      await imprimirCupom(v)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao imprimir'
+      alert(msg)
+    } finally {
+      setImprimindo(false)
+    }
+  }
+
   const { data, isLoading } = useQuery({
     queryKey: ['venda-detalhe', vendaId],
     queryFn: () => api.pdv.buscarVenda(vendaId!),
